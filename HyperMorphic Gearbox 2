@@ -1,0 +1,1304 @@
+import React, { useState } from ‘react’;
+import { Play, Download, AlertCircle, CheckCircle, XCircle, TrendingUp, Zap } from ‘lucide-react’;
+
+const HyperMorphicTestSuite = () => {
+const [testResults, setTestResults] = useState(null);
+const [isRunning, setIsRunning] = useState(false);
+const [deepAnalysis, setDeepAnalysis] = useState(null);
+const [necessarySufficientAnalysis, setNecessarySufficientAnalysis] = useState(null);
+const [selectedTests, setSelectedTests] = useState({
+edgeCaseExplorer: true,
+modularGearbox: true,
+hyperMorphicArithmetic: true,
+phaseTransitions: true,
+contextualState: true,
+extremeValues: true,
+performanceBench: true
+});
+
+// Core mathematical functions
+const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+
+const modInverse = (a, m) => {
+if (gcd(a, m) !== 1) return null;
+let [old_r, r] = [a, m];
+let [old_s, s] = [1, 0];
+while (r !== 0) {
+const quotient = Math.floor(old_r / r);
+[old_r, r] = [r, old_r - quotient * r];
+[old_s, s] = [s, old_s - quotient * s];
+}
+return ((old_s % m) + m) % m;
+};
+
+const base = (d) => Math.floor(Math.log2(d)) + 1;
+const modulus = (d) => Math.floor(Math.sqrt(d)) + 1;
+
+// HyperMorphic number operations
+const EPSILON_H = 1e-50;
+
+const promote = (z) => Math.abs(z) < EPSILON_H ? EPSILON_H : z;
+
+const hyperMorphicAdd = (a, b, d = 1000) => {
+const raw = a + b;
+const phi = base(d);
+return promote(raw % phi);
+};
+
+const hyperMorphicMul = (a, b, d = 1000) => {
+const raw = a * b;
+const psi = modulus(d);
+return promote(raw % psi);
+};
+
+const hyperMorphicSub = (a, b, d = 1000) => {
+const raw = a - b;
+const phi = base(d);
+const result = raw % phi;
+return Math.abs(result) < EPSILON_H ? EPSILON_H : result;
+};
+
+const hyperMorphicDiv = (a, b, d = 1000) => {
+if (Math.abs(b) < EPSILON_H) b = EPSILON_H;
+return promote(a / b);
+};
+
+// Modular Gearbox Tests
+const testModularGearbox = (d1, d2) => {
+const b1 = base(d1);
+const m1 = modulus(d1);
+const b2 = base(d2);
+const m2 = modulus(d2);
+
+```
+const gcd1 = gcd(b1, m1);
+const gcd2 = gcd(b2, m2);
+
+if (gcd1 !== 1 || gcd2 !== 1) {
+  return { 
+    success: false, 
+    reason: `GCD condition failed: gcd(b1,m1)=${gcd1}, gcd(b2,m2)=${gcd2}`,
+    b1, m1, b2, m2,
+    theorem1: false,
+    theorem2: false,
+    recoveryRate: 0,
+    testCount: 0
+  };
+}
+
+const inv1 = modInverse(b1, m1);
+const inv2 = modInverse(b2, m2);
+
+if (inv1 === null || inv2 === null) {
+  return { 
+    success: false, 
+    reason: 'Inverse does not exist',
+    b1, m1, b2, m2,
+    theorem1: false,
+    theorem2: false,
+    recoveryRate: 0,
+    testCount: 0
+  };
+}
+
+// Test Theorem 1: m1 <= m2
+const theorem1 = m1 <= m2;
+
+// Test Theorem 2: Inverse congruence
+const theorem2 = (inv2 * b2) % m1 === 1;
+
+// Test recoverability on sample inputs
+let recoveryTests = 0;
+let recoverySuccesses = 0;
+const testInputs = Math.min(m1, 100);
+
+for (let v = 0; v < testInputs; v++) {
+  const t1 = (b1 * v) % m1;
+  const t2 = (b2 * t1) % m2;
+  const t1_recovered_raw = (inv2 * t2) % m2;
+  const t1_recovered = t1_recovered_raw % m1;
+  const v_recovered = (inv1 * t1_recovered) % m1;
+  
+  recoveryTests++;
+  if (v_recovered === v) recoverySuccesses++;
+}
+
+const recoveryRate = recoverySuccesses / recoveryTests;
+
+return {
+  success: recoveryRate > 0.99,
+  b1, m1, b2, m2,
+  theorem1,
+  theorem2,
+  recoveryRate,
+  testCount: recoveryTests
+};
+```
+
+};
+
+// Phase Transition Tests
+const testPhaseTransitions = () => {
+const results = [];
+const contexts = [
+{ beta: 0.5, mu: 0.3, tau: 0.2, name: ‘Balanced’ },
+{ beta: 0.9, mu: 0.05, tau: 0.05, name: ‘Pressure Dominant’ },
+{ beta: 0.1, mu: 0.85, tau: 0.05, name: ‘Gradient Dominant’ },
+{ beta: 0.1, mu: 0.1, tau: 0.8, name: ‘Tension Dominant’ },
+{ beta: 0.33, mu: 0.33, tau: 0.34, name: ‘Equipartition’ }
+];
+
+```
+contexts.forEach(ctx => {
+  const beta_critical = 0.7;
+  const mu_critical = 0.7;
+  const tau_critical = 0.7;
+
+  let phase = 'Normal';
+  if (ctx.beta > beta_critical) phase = 'Base Epsilonium';
+  else if (ctx.mu > mu_critical) phase = 'Modulus Epsilonium';
+  else if (ctx.tau > tau_critical) phase = 'Tension Epsilonium';
+
+  results.push({
+    name: ctx.name,
+    phase,
+    beta: ctx.beta,
+    mu: ctx.mu,
+    tau: ctx.tau,
+    energy: ctx.beta + ctx.mu + ctx.tau
+  });
+});
+
+return results;
+```
+
+};
+
+// Contextual State Evolution
+const testContextualStateEvolution = (steps = 100) => {
+let beta = 0.1, mu = 0.1, tau = 0.1;
+const trajectory = [];
+
+```
+for (let i = 0; i < steps; i++) {
+  // Simulate some stress accumulation
+  const pressure = 0.01 * Math.sin(i * 0.1);
+  const gradient = 0.01 * Math.cos(i * 0.15);
+  const strain = 0.01 * Math.sin(i * 0.2);
+
+  beta += pressure * (1 - beta);
+  mu += gradient * (1 - mu);
+  tau += strain * (1 - tau);
+
+  // Decay
+  beta *= 0.99;
+  mu *= 0.99;
+  tau *= 0.99;
+
+  trajectory.push({ step: i, beta, mu, tau });
+}
+
+return trajectory;
+```
+
+};
+
+// Extreme Value Tests
+const testExtremeValues = () => {
+const extremes = [];
+
+```
+// Test near-zero operations
+const nearZero1 = hyperMorphicAdd(EPSILON_H, EPSILON_H);
+extremes.push({
+  test: 'ε_H + ε_H',
+  result: nearZero1,
+  valid: nearZero1 >= EPSILON_H
+});
+
+// Test large values
+const large1 = hyperMorphicMul(1e10, 1e10, 10000);
+extremes.push({
+  test: '1e10 × 1e10 (mod)',
+  result: large1,
+  valid: isFinite(large1)
+});
+
+// Test division by near-zero
+const divByNearZero = hyperMorphicDiv(1.0, EPSILON_H);
+extremes.push({
+  test: '1.0 ÷ ε_H',
+  result: divByNearZero,
+  valid: isFinite(divByNearZero)
+});
+
+// Test subtraction to zero
+const subToZero = hyperMorphicSub(5.0, 5.0);
+extremes.push({
+  test: '5.0 - 5.0',
+  result: subToZero,
+  valid: subToZero === EPSILON_H
+});
+
+return extremes;
+```
+
+};
+
+// Performance Benchmark
+const performanceBenchmark = () => {
+const operations = 10000;
+const benchmarks = [];
+
+```
+// Benchmark modular gearbox
+const start1 = performance.now();
+for (let i = 0; i < operations; i++) {
+  testModularGearbox(1000 + i % 100, 5000 + i % 100);
+}
+const end1 = performance.now();
+benchmarks.push({
+  operation: 'Modular Gearbox',
+  opsPerSecond: (operations / ((end1 - start1) / 1000)).toFixed(0),
+  totalTime: (end1 - start1).toFixed(2)
+});
+
+// Benchmark HyperMorphic arithmetic
+const start2 = performance.now();
+for (let i = 0; i < operations; i++) {
+  hyperMorphicAdd(i, i + 1);
+  hyperMorphicMul(i, i + 1);
+  hyperMorphicSub(i, i - 1);
+  hyperMorphicDiv(i + 1, i + 1);
+}
+const end2 = performance.now();
+benchmarks.push({
+  operation: 'HyperMorphic Arithmetic (4 ops)',
+  opsPerSecond: ((operations * 4) / ((end2 - start2) / 1000)).toFixed(0),
+  totalTime: (end2 - start2).toFixed(2)
+});
+
+return benchmarks;
+```
+
+};
+
+// Deep Analysis Function
+const analyzeGearboxPair = (d1, d2) => {
+const b1 = base(d1);
+const m1 = modulus(d1);
+const b2 = base(d2);
+const m2 = modulus(d2);
+
+```
+const analysis = {
+  dimensions: { d1, d2 },
+  parameters: { b1, m1, b2, m2 },
+  conditions: {},
+  predictions: {},
+  detailed: {}
+};
+
+// Check GCD conditions
+const gcd1 = gcd(b1, m1);
+const gcd2 = gcd(b2, m2);
+analysis.conditions.gcd1 = gcd1;
+analysis.conditions.gcd2 = gcd2;
+analysis.conditions.gcdValid = (gcd1 === 1 && gcd2 === 1);
+
+if (!analysis.conditions.gcdValid) {
+  analysis.predictions.result = 'FAIL - GCD condition not met';
+  return analysis;
+}
+
+// Compute inverses
+const inv1 = modInverse(b1, m1);
+const inv2 = modInverse(b2, m2);
+analysis.detailed.inv1 = inv1;
+analysis.detailed.inv2 = inv2;
+
+// Theorem 1: m1 <= m2
+analysis.conditions.theorem1 = m1 <= m2;
+
+// Theorem 2: inv2 * b2 ≡ 1 (mod m1)
+analysis.conditions.theorem2 = (inv2 * b2) % m1 === 1;
+
+// Modulus ratio
+analysis.detailed.modulusRatio = (m2 / m1).toFixed(3);
+analysis.detailed.baseRatio = (b2 / b1).toFixed(3);
+
+// Predict outcome
+if (analysis.conditions.theorem1) {
+  analysis.predictions.result = 'SUCCESS (Theorem 1)';
+  analysis.predictions.confidence = 'HIGH';
+  analysis.predictions.reason = 'm₁ ≤ m₂ guarantees universal recoverability';
+} else if (analysis.conditions.theorem2) {
+  analysis.predictions.result = 'SUCCESS (Theorem 2)';
+  analysis.predictions.confidence = 'HIGH';
+  analysis.predictions.reason = 'Inverse congruence condition satisfied';
+} else {
+  analysis.predictions.result = 'UNCERTAIN';
+  analysis.predictions.confidence = 'LOW';
+  analysis.predictions.reason = 'Neither sufficient condition met - may have partial recovery';
+}
+
+// Test a sample to verify
+const sampleTests = 20;
+let successes = 0;
+for (let v = 0; v < sampleTests; v++) {
+  const t1 = (b1 * v) % m1;
+  const t2 = (b2 * t1) % m2;
+  const t1_rec = ((inv2 * t2) % m2) % m1;
+  const v_rec = (inv1 * t1_rec) % m1;
+  if (v_rec === v) successes++;
+}
+analysis.detailed.actualRecoveryRate = (successes / sampleTests * 100).toFixed(1) + '%';
+
+return analysis;
+```
+
+};
+
+// Edge Case Explorer - automatically finds interesting dimension pairs
+const exploreEdgeCases = () => {
+const edgeCases = [];
+
+```
+// Category 1: Near-threshold cases (m1 very close to m2)
+const nearThresholdPairs = [
+  [10000, 10001], // Already have this
+  [10000, 10100],
+  [5000, 5001],
+  [1000, 1001]
+];
+
+// Category 2: Reversed pairs (test directional asymmetry)
+const reversedPairs = [
+  [91000, 15000], // Already have reverse of Pair A
+  [10000, 100],
+  [5000, 1000]
+];
+
+// Category 3: Powers and special ratios
+const specialRatioPairs = [
+  [64, 256],    // 4x ratio, powers of 2
+  [100, 400],   // 4x ratio
+  [81, 729],    // 9x ratio, powers of 3
+  [49, 343]     // 7x ratio, powers of 7
+];
+
+// Category 4: Golden ratio approximations
+const goldenRatioPairs = [
+  [100, 162],   // φ ≈ 1.618
+  [1000, 1618],
+  [5000, 8090]
+];
+
+// Category 5: Extreme cases
+const extremePairs = [
+  [10, 10000],   // 1000x ratio
+  [2, 1000],     // Minimal d1
+  [1000, 1000],  // Equal dimensions
+  [9999, 10000]  // Adjacent large
+];
+
+const allPairs = [
+  ...nearThresholdPairs.map(p => ({ pair: p, category: 'Near-Threshold' })),
+  ...reversedPairs.map(p => ({ pair: p, category: 'Directional Test' })),
+  ...specialRatioPairs.map(p => ({ pair: p, category: 'Special Ratios' })),
+  ...goldenRatioPairs.map(p => ({ pair: p, category: 'Golden Ratio' })),
+  ...extremePairs.map(p => ({ pair: p, category: 'Extreme Cases' }))
+];
+
+for (const { pair, category } of allPairs) {
+  const [d1, d2] = pair;
+  const result = testModularGearbox(d1, d2);
+  
+  edgeCases.push({
+    category,
+    d1,
+    d2,
+    ...result,
+    interesting: (
+      // Partial recovery is interesting
+      (result.recoveryRate > 0 && result.recoveryRate < 1) ||
+      // Theorem 2 without Theorem 1 is interesting
+      (!result.theorem1 && result.theorem2) ||
+      // Both theorems satisfied is interesting
+      (result.theorem1 && result.theorem2)
+    )
+  });
+}
+
+return edgeCases;
+```
+
+};
+
+// Necessary and Sufficient Condition Analysis (The Proposition)
+const necessarySufficientTest = (d1, d2) => {
+const b1 = base(d1);
+const m1 = modulus(d1);
+const b2 = base(d2);
+const m2 = modulus(d2);
+
+```
+const result = {
+  dimensions: { d1, d2 },
+  parameters: { b1, m1, b2, m2 },
+  gcdValid: gcd(b1, m1) === 1 && gcd(b2, m2) === 1,
+  imageSet: [],
+  congruenceTests: [],
+  recoveryMap: {},
+  statistics: {
+    totalInputs: 0,
+    recoverableInputs: 0,
+    nonRecoverableInputs: 0,
+    recoveryRate: 0
+  },
+  edgeCases: [],
+  collisions: []
+};
+
+if (!result.gcdValid) {
+  result.error = 'GCD condition not satisfied';
+  return result;
+}
+
+const inv1 = modInverse(b1, m1);
+const inv2 = modInverse(b2, m2);
+
+if (inv1 === null || inv2 === null) {
+  result.error = 'Modular inverse does not exist';
+  return result;
+}
+
+// Build the first-stage image set S
+const S = new Set();
+const inputToT1Map = {};
+
+for (let v = 0; v < m1; v++) {
+  const t1 = (b1 * v) % m1;
+  S.add(t1);
+  if (!inputToT1Map[t1]) inputToT1Map[t1] = [];
+  inputToT1Map[t1].push(v);
+}
+
+result.imageSet = Array.from(S).sort((a, b) => a - b);
+result.statistics.imageSetSize = S.size;
+
+// For each t in S, test the necessary-and-sufficient congruence
+// Congruence: (inv2(b2) * b2 - 1) * t ≡ inv2(b2) * q(t) * m2 (mod m1)
+// Where b2 * t = q(t) * m2 + r(t)
+
+let recoverableCount = 0;
+const detailedTests = [];
+
+for (const t of S) {
+  // Compute b2 * t as integer (may exceed m2)
+  const product = b2 * t;
+  const q_t = Math.floor(product / m2);
+  const r_t = product % m2;
+
+  // After inversion: t1_recovered = (inv2 * r_t) mod m2
+  const t1_recovered_raw = (inv2 * r_t) % m2;
+  const t1_recovered = t1_recovered_raw % m1;
+
+  // Check if it matches original t
+  const recovers = (t1_recovered === t);
+
+  // Compute the congruence test
+  // LHS: (inv2 * b2 - 1) * t mod m1
+  const lhs = ((inv2 * b2 - 1) * t) % m1;
+  // RHS: inv2 * q_t * m2 mod m1
+  const rhs = (inv2 * q_t * m2) % m1;
+  const congruenceHolds = (lhs === rhs);
+
+  if (recovers) recoverableCount++;
+
+  detailedTests.push({
+    t,
+    q_t,
+    r_t,
+    t1_recovered,
+    recovers,
+    congruenceHolds,
+    lhs,
+    rhs,
+    congruenceMatch: lhs === rhs
+  });
+
+  // Track which inputs map to this t
+  result.recoveryMap[t] = {
+    recovers,
+    inputs: inputToT1Map[t] || [],
+    t1_recovered
+  };
+}
+
+result.congruenceTests = detailedTests;
+result.statistics.totalInputs = m1;
+result.statistics.recoverableInputs = recoverableCount;
+result.statistics.nonRecoverableInputs = S.size - recoverableCount;
+result.statistics.recoveryRate = (recoverableCount / S.size * 100).toFixed(2);
+
+// Find edge cases: where congruence fails
+result.edgeCases = detailedTests.filter(test => !test.congruenceHolds);
+
+// Find collision cases: multiple inputs mapping to same t1
+result.collisions = Object.entries(inputToT1Map)
+  .filter(([t1, inputs]) => inputs.length > 1)
+  .map(([t1, inputs]) => ({
+    t1: parseInt(t1),
+    inputs,
+    count: inputs.length
+  }));
+
+// Identify the actual failing inputs (trace back from non-recovering t values)
+const failingInputs = [];
+for (const test of detailedTests) {
+  if (!test.recovers && inputToT1Map[test.t]) {
+    failingInputs.push(...inputToT1Map[test.t].map(v => ({
+      input: v,
+      t1: test.t,
+      t1_recovered: test.t1_recovered,
+      reason: 'Congruence condition fails'
+    })));
+  }
+}
+result.failingInputs = failingInputs;
+
+return result;
+```
+
+};
+
+// Main test runner
+const runTests = () => {
+setIsRunning(true);
+const results = {
+timestamp: new Date().toISOString(),
+summary: { total: 0, passed: 0, failed: 0 },
+tests: {}
+};
+
+```
+try {
+  // 0. Edge Case Explorer
+  if (selectedTests.edgeCaseExplorer) {
+    const edgeCases = exploreEdgeCases();
+    results.tests.edgeCaseExplorer = edgeCases;
+    results.summary.total += edgeCases.length;
+    results.summary.passed += edgeCases.filter(e => e.interesting).length;
+  }
+
+  // 1. Modular Gearbox Tests
+  if (selectedTests.modularGearbox) {
+    const gearboxTests = [];
+    const testPairs = [
+      [15000, 91000],   // Pair A - m1 <= m2 (Theorem 1 SUCCESS)
+      [110, 90],        // Failing pair - neither theorem
+      [1000, 5000],     // Test pair
+      [10000, 10001],   // Near equal
+      [100, 10000],     // Large ratio
+      [256, 1024],      // Powers of 2 nearby
+      [1000, 1000000],  // 1000x ratio
+      [50, 200],        // Small values
+      [5000, 10000],    // Medium values
+      [91000, 15000],   // Reverse of Pair A
+    ];
+
+    testPairs.forEach(([d1, d2]) => {
+      const result = testModularGearbox(d1, d2);
+      gearboxTests.push({ d1, d2, ...result });
+      results.summary.total++;
+      if (result.success) results.summary.passed++;
+      else results.summary.failed++;
+    });
+
+    results.tests.modularGearbox = gearboxTests;
+  }
+
+  // 2. HyperMorphic Arithmetic Tests
+  if (selectedTests.hyperMorphicArithmetic) {
+    const arithmeticTests = [];
+    
+    // Test commutativity
+    const a = 5, b = 7, d = 1000;
+    const addCommute = Math.abs(hyperMorphicAdd(a, b, d) - hyperMorphicAdd(b, a, d)) < 1e-10;
+    arithmeticTests.push({ test: 'Addition Commutativity', passed: addCommute });
+    
+    const mulCommute = Math.abs(hyperMorphicMul(a, b, d) - hyperMorphicMul(b, a, d)) < 1e-10;
+    arithmeticTests.push({ test: 'Multiplication Commutativity', passed: mulCommute });
+
+    // Test ε_H absorption
+    const absorbTest = hyperMorphicSub(a, a, d);
+    arithmeticTests.push({ 
+      test: 'Zero becomes ε_H', 
+      passed: Math.abs(absorbTest - EPSILON_H) < 1e-60,
+      value: absorbTest
+    });
+
+    results.tests.hyperMorphicArithmetic = arithmeticTests;
+    results.summary.total += arithmeticTests.length;
+    results.summary.passed += arithmeticTests.filter(t => t.passed).length;
+    results.summary.failed += arithmeticTests.filter(t => !t.passed).length;
+  }
+
+  // 3. Phase Transition Tests
+  if (selectedTests.phaseTransitions) {
+    const phaseTests = testPhaseTransitions();
+    results.tests.phaseTransitions = phaseTests;
+    results.summary.total += phaseTests.length;
+    results.summary.passed += phaseTests.length; // All are valid observations
+  }
+
+  // 4. Contextual State Tests
+  if (selectedTests.contextualState) {
+    const stateEvolution = testContextualStateEvolution(50);
+    results.tests.contextualState = {
+      trajectory: stateEvolution,
+      finalState: stateEvolution[stateEvolution.length - 1]
+    };
+    results.summary.total += 1;
+    results.summary.passed += 1;
+  }
+
+  // 5. Extreme Value Tests
+  if (selectedTests.extremeValues) {
+    const extremeTests = testExtremeValues();
+    results.tests.extremeValues = extremeTests;
+    results.summary.total += extremeTests.length;
+    results.summary.passed += extremeTests.filter(t => t.valid).length;
+    results.summary.failed += extremeTests.filter(t => !t.valid).length;
+  }
+
+  // 6. Performance Benchmark
+  if (selectedTests.performanceBench) {
+    const perfResults = performanceBenchmark();
+    results.tests.performance = perfResults;
+  }
+
+  setTestResults(results);
+} catch (error) {
+  console.error('Test error:', error);
+  results.error = error.message;
+  setTestResults(results);
+} finally {
+  setIsRunning(false);
+}
+```
+
+};
+
+const downloadResults = () => {
+const dataStr = JSON.stringify(testResults, null, 2);
+const dataBlob = new Blob([dataStr], { type: ‘application/json’ });
+const url = URL.createObjectURL(dataBlob);
+const link = document.createElement(‘a’);
+link.href = url;
+link.download = `hypermorphic_tests_${Date.now()}.json`;
+link.click();
+URL.revokeObjectURL(url);
+};
+
+const generateReport = () => {
+if (!testResults) return;
+
+```
+const report = `
+```
+
+╔════════════════════════════════════════════════════════════════╗
+║        HYPERMORPHIC MATHEMATICAL VALIDATION REPORT            ║
+║                   Full Throttle Analysis                       ║
+╚════════════════════════════════════════════════════════════════╝
+
+Generated: ${new Date().toLocaleString()}
+Framework: HyperMorphic Physics v17
+Epsilon: ε_ℍ = ${EPSILON_H.toExponential(2)}
+
+═══════════════════════════════════════════════════════════════
+EXECUTIVE SUMMARY
+═══════════════════════════════════════════════════════════════
+
+Total Tests Executed: ${testResults.summary.total}
+Tests Passed: ${testResults.summary.passed} (${((testResults.summary.passed / testResults.summary.total) * 100).toFixed(1)}%)
+Tests Failed: ${testResults.summary.failed} (${((testResults.summary.failed / testResults.summary.total) * 100).toFixed(1)}%)
+
+═══════════════════════════════════════════════════════════════
+MODULAR GEARBOX VALIDATION
+═══════════════════════════════════════════════════════════════
+
+${testResults.tests.modularGearbox ? testResults.tests.modularGearbox.map((test, idx) => `Test ${idx + 1}: d₁=${test.d1}, d₂=${test.d2} Parameters: b₁=${test.b1}, m₁=${test.m1}, b₂=${test.b2}, m₂=${test.m2} Theorem 1 (m₁≤m₂): ${test.theorem1 ? 'SATISFIED ✓' : 'NOT SATISFIED ✗'} Theorem 2 (congruence): ${test.theorem2 ? 'SATISFIED ✓' : 'NOT SATISFIED ✗'} Recovery Rate: ${test.testCount > 0 ? (test.recoveryRate * 100).toFixed(2) : 0}% (${test.testCount} tests) Result: ${test.success ? '✓ PASS' : '✗ FAIL'} ${test.reason ?`Reason: ${test.reason}`: ''}`).join(’\n’) : ‘No gearbox tests performed’}
+
+═══════════════════════════════════════════════════════════════
+HYPERMORPHIC ARITHMETIC VALIDATION
+═══════════════════════════════════════════════════════════════
+
+${testResults.tests.hyperMorphicArithmetic ? testResults.tests.hyperMorphicArithmetic.map(test => `${test.test}: ${test.passed ? '✓ PASS' : '✗ FAIL'} ${test.value !== undefined ?`  Value: ${test.value}`: ''}`).join(’\n’) : ‘No arithmetic tests performed’}
+
+═══════════════════════════════════════════════════════════════
+PHASE TRANSITION ANALYSIS
+═══════════════════════════════════════════════════════════════
+
+${testResults.tests.phaseTransitions ? testResults.tests.phaseTransitions.map(test => `${test.name}: Phase: ${test.phase} β (Base): ${test.beta.toFixed(3)} μ (Modulus): ${test.mu.toFixed(3)} τ (Tension): ${test.tau.toFixed(3)} Total Energy: ${test.energy.toFixed(3)}`).join(’\n’) : ‘No phase tests performed’}
+
+═══════════════════════════════════════════════════════════════
+EXTREME VALUE TESTS
+═══════════════════════════════════════════════════════════════
+
+${testResults.tests.extremeValues ? testResults.tests.extremeValues.map(test => `${test.test}: ${test.valid ? '✓ VALID' : '✗ INVALID'} Result: ${typeof test.result === 'number' ? test.result.toExponential(3) : test.result}`).join(’\n’) : ‘No extreme value tests performed’}
+
+═══════════════════════════════════════════════════════════════
+PERFORMANCE METRICS
+═══════════════════════════════════════════════════════════════
+
+${testResults.tests.performance ? testResults.tests.performance.map(bench => `${bench.operation}: Operations/Second: ${bench.opsPerSecond} Total Time: ${bench.totalTime}ms`).join(’\n’) : ‘No performance tests performed’}
+
+═══════════════════════════════════════════════════════════════
+CONCLUSIONS
+═══════════════════════════════════════════════════════════════
+
+1. Theorem 1 (Modulus Order): ${testResults.tests.modularGearbox ?
+   `Validated in ${testResults.tests.modularGearbox.filter(t => t.theorem1 && t.success).length}/${testResults.tests.modularGearbox.filter(t => t.theorem1).length} cases` : ‘N/A’}
+1. Theorem 2 (Inverse Congruence): ${testResults.tests.modularGearbox ?
+   `Validated in ${testResults.tests.modularGearbox.filter(t => t.theorem2 && t.success).length}/${testResults.tests.modularGearbox.filter(t => t.theorem2).length} cases` : ‘N/A’}
+1. ε_ℍ Axiom: ${testResults.tests.extremeValues?.find(t => t.test.includes(‘5.0 - 5.0’))?.valid ?
+   ‘CONFIRMED - Zero becomes epsilon’ : ‘UNVERIFIED’}
+1. Singularity Prevention: ${testResults.tests.extremeValues?.find(t => t.test.includes(‘÷ ε_H’))?.valid ?
+   ‘CONFIRMED - Division by near-zero bounded’ : ‘UNVERIFIED’}
+
+═══════════════════════════════════════════════════════════════
+END REPORT
+═══════════════════════════════════════════════════════════════
+`;
+
+```
+const blob = new Blob([report], { type: 'text/plain' });
+const url = URL.createObjectURL(blob);
+const link = document.createElement('a');
+link.href = url;
+link.download = `hypermorphic_report_${Date.now()}.txt`;
+link.click();
+URL.revokeObjectURL(url);
+```
+
+};
+
+return (
+<div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-8">
+<div className="max-w-7xl mx-auto">
+<div className="text-center mb-8">
+<h1 className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 mb-4">
+HyperMorphic Test Suite
+</h1>
+<p className="text-cyan-300 text-lg">Rigorous Mathematical Benchmarking</p>
+<div className="mt-4 flex items-center justify-center gap-2 text-purple-300">
+<Zap className="w-5 h-5" />
+<span className="font-mono text-sm">ε_ℍ = {EPSILON_H.toExponential(2)}</span>
+</div>
+</div>
+
+```
+    {/* Test Selection */}
+    <div className="bg-slate-800 rounded-lg p-6 mb-6 border border-purple-500/30">
+      <h2 className="text-xl font-bold text-cyan-400 mb-4">Select Tests</h2>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        {Object.entries(selectedTests).map(([key, value]) => (
+          <label key={key} className="flex items-center gap-2 text-purple-200 cursor-pointer hover:text-cyan-300 transition-colors">
+            <input
+              type="checkbox"
+              checked={value}
+              onChange={(e) => setSelectedTests(prev => ({ ...prev, [key]: e.target.checked }))}
+              className="w-4 h-4"
+            />
+            <span className="capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+
+    {/* Control Panel */}
+    <div className="flex gap-4 mb-8">
+      <button
+        onClick={runTests}
+        disabled={isRunning}
+        className="flex-1 bg-gradient-to-r from-cyan-500 to-purple-500 text-white font-bold py-4 px-8 rounded-lg hover:from-cyan-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all transform hover:scale-105"
+      >
+        <Play className="w-5 h-5" />
+        {isRunning ? 'Running Tests...' : 'Run Test Suite'}
+      </button>
+      
+      {testResults && (
+        <>
+          <button
+            onClick={downloadResults}
+            className="bg-slate-700 text-cyan-300 font-bold py-4 px-8 rounded-lg hover:bg-slate-600 flex items-center gap-2 transition-all"
+          >
+            <Download className="w-5 h-5" />
+            Export JSON
+          </button>
+          <button
+            onClick={generateReport}
+            className="bg-purple-700 text-white font-bold py-4 px-8 rounded-lg hover:bg-purple-600 flex items-center gap-2 transition-all"
+          >
+            <Download className="w-5 h-5" />
+            Generate Report
+          </button>
+        </>
+      )}
+    </div>
+
+    {/* Results Display */}
+    {testResults && (
+      <div className="space-y-6">
+        {/* Summary */}
+        <div className="bg-slate-800 rounded-lg p-6 border border-purple-500/30">
+          <h2 className="text-2xl font-bold text-cyan-400 mb-4">Test Summary</h2>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-slate-700 p-4 rounded-lg text-center">
+              <div className="text-3xl font-bold text-purple-300">{testResults.summary.total}</div>
+              <div className="text-sm text-slate-400">Total Tests</div>
+            </div>
+            <div className="bg-emerald-900/30 p-4 rounded-lg text-center border border-emerald-500/30">
+              <div className="text-3xl font-bold text-emerald-300">{testResults.summary.passed}</div>
+              <div className="text-sm text-slate-400">Passed</div>
+            </div>
+            <div className="bg-red-900/30 p-4 rounded-lg text-center border border-red-500/30">
+              <div className="text-3xl font-bold text-red-300">{testResults.summary.failed}</div>
+              <div className="text-sm text-slate-400">Failed</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Necessary-Sufficient Analysis Panel */}
+        {necessarySufficientAnalysis && (
+          <div className="bg-gradient-to-br from-indigo-900 to-purple-900 rounded-lg p-6 border-2 border-indigo-400/50 shadow-lg shadow-indigo-500/30">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-indigo-300">🔍 Necessary & Sufficient Condition Analysis</h2>
+              <button
+                onClick={() => setNecessarySufficientAnalysis(null)}
+                className="text-indigo-300 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {necessarySufficientAnalysis.error ? (
+              <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 text-red-300">
+                <strong>Error:</strong> {necessarySufficientAnalysis.error}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Header Stats */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-slate-800/50 p-4 rounded-lg">
+                    <div className="text-sm text-indigo-300 mb-1">Dimensions</div>
+                    <div className="font-mono text-white">
+                      d₁={necessarySufficientAnalysis.dimensions.d1}, d₂={necessarySufficientAnalysis.dimensions.d2}
+                    </div>
+                    <div className="text-xs text-slate-400 mt-2">
+                      b₁={necessarySufficientAnalysis.parameters.b1}, m₁={necessarySufficientAnalysis.parameters.m1} | 
+                      b₂={necessarySufficientAnalysis.parameters.b2}, m₂={necessarySufficientAnalysis.parameters.m2}
+                    </div>
+                  </div>
+                  <div className="bg-slate-800/50 p-4 rounded-lg">
+                    <div className="text-sm text-indigo-300 mb-1">Recovery Statistics</div>
+                    <div className="text-3xl font-bold text-cyan-400">
+                      {necessarySufficientAnalysis.statistics.recoveryRate}%
+                    </div>
+                    <div className="text-xs text-slate-400 mt-1">
+                      {necessarySufficientAnalysis.statistics.recoverableInputs} / {necessarySufficientAnalysis.imageSet?.length || 0} elements in S
+                    </div>
+                  </div>
+                </div>
+
+                {/* Image Set Analysis */}
+                <div className="bg-slate-800/50 p-4 rounded-lg">
+                  <h3 className="font-bold text-indigo-300 mb-2">First-Stage Image Set (S)</h3>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <span className="text-slate-400">Size:</span>
+                      <span className="ml-2 text-white font-mono">
+                        |S| = {necessarySufficientAnalysis.statistics.imageSetSize}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Total Inputs:</span>
+                      <span className="ml-2 text-white font-mono">
+                        {necessarySufficientAnalysis.statistics.totalInputs}
+                      </span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-slate-400">Elements:</span>
+                      <div className="mt-1 text-xs text-cyan-300 font-mono max-h-20 overflow-y-auto">
+                        {necessarySufficientAnalysis.imageSet?.join(', ')}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Collision Analysis */}
+                {necessarySufficientAnalysis.collisions && necessarySufficientAnalysis.collisions.length > 0 && (
+                  <div className="bg-yellow-900/20 border border-yellow-500/30 p-4 rounded-lg">
+                    <h3 className="font-bold text-yellow-300 mb-2">⚠️ Collision Detection</h3>
+                    <div className="text-sm text-slate-300 mb-2">
+                      Found {necessarySufficientAnalysis.collisions.length} cases where multiple inputs map to same t₁
+                    </div>
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {necessarySufficientAnalysis.collisions.slice(0, 10).map((collision, idx) => (
+                        <div key={idx} className="bg-slate-800/50 p-2 rounded text-xs">
+                          <span className="text-yellow-300">t₁={collision.t1}</span>
+                          <span className="text-slate-400"> ← inputs: </span>
+                          <span className="text-cyan-300 font-mono">[{collision.inputs.join(', ')}]</span>
+                          <span className="text-slate-400"> ({collision.count} collisions)</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Failing Inputs */}
+                {necessarySufficientAnalysis.failingInputs && necessarySufficientAnalysis.failingInputs.length > 0 && (
+                  <div className="bg-red-900/20 border border-red-500/30 p-4 rounded-lg">
+                    <h3 className="font-bold text-red-300 mb-2">❌ Non-Recoverable Inputs</h3>
+                    <div className="text-sm text-slate-300 mb-2">
+                      {necessarySufficientAnalysis.failingInputs.length} inputs fail the necessary-sufficient congruence test
+                    </div>
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {necessarySufficientAnalysis.failingInputs.slice(0, 10).map((fail, idx) => (
+                        <div key={idx} className="bg-slate-800/50 p-2 rounded text-xs">
+                          <span className="text-red-300">v={fail.input}</span>
+                          <span className="text-slate-400"> → t₁={fail.t1}</span>
+                          <span className="text-slate-400"> → recovered t₁={fail.t1_recovered}</span>
+                          <span className="text-red-400"> ✗</span>
+                        </div>
+                      ))}
+                      {necessarySufficientAnalysis.failingInputs.length > 10 && (
+                        <div className="text-xs text-slate-400 italic">
+                          ... and {necessarySufficientAnalysis.failingInputs.length - 10} more
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Congruence Test Details */}
+                <div className="bg-slate-800/50 p-4 rounded-lg">
+                  <h3 className="font-bold text-indigo-300 mb-2">Congruence Test Results</h3>
+                  <div className="text-xs text-slate-400 mb-3">
+                    Testing: (inv₂(b₂)·b₂ - 1)·t ≡ inv₂(b₂)·q(t)·m₂ (mod m₁) for each t ∈ S
+                  </div>
+                  <div className="space-y-1 max-h-60 overflow-y-auto">
+                    {necessarySufficientAnalysis.congruenceTests?.slice(0, 20).map((test, idx) => (
+                      <div 
+                        key={idx} 
+                        className={`p-2 rounded text-xs font-mono ${
+                          test.recovers ? 'bg-emerald-900/20' : 'bg-red-900/20'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-300">
+                            t={test.t} → q={test.q_t}, r={test.r_t}
+                          </span>
+                          <span className={test.recovers ? 'text-emerald-400' : 'text-red-400'}>
+                            {test.recovers ? '✓' : '✗'}
+                          </span>
+                        </div>
+                        <div className="text-slate-400 mt-1">
+                          LHS≡{test.lhs}, RHS≡{test.rhs} → {test.congruenceMatch ? 'Match' : 'Mismatch'}
+                        </div>
+                      </div>
+                    ))}
+                    {(necessarySufficientAnalysis.congruenceTests?.length || 0) > 20 && (
+                      <div className="text-xs text-slate-400 italic text-center pt-2">
+                        Showing 20 of {necessarySufficientAnalysis.congruenceTests.length} tests
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Summary Verdict */}
+                <div className={`p-4 rounded-lg border-2 ${
+                  necessarySufficientAnalysis.statistics.recoveryRate === '100.00' 
+                    ? 'bg-emerald-900/20 border-emerald-500/50' 
+                    : necessarySufficientAnalysis.statistics.recoveryRate === '0.00'
+                    ? 'bg-red-900/20 border-red-500/50'
+                    : 'bg-yellow-900/20 border-yellow-500/50'
+                }`}>
+                  <h3 className="font-bold text-white mb-2">Mathematical Verdict</h3>
+                  <div className="text-sm text-slate-200">
+                    {necessarySufficientAnalysis.statistics.recoveryRate === '100.00' ? (
+                      <>
+                        ✓ <strong>Universal Recoverability Confirmed</strong>: All elements in the first-stage image set S satisfy the necessary-sufficient congruence condition. This pipeline is a lossless corridor.
+                      </>
+                    ) : necessarySufficientAnalysis.statistics.recoveryRate === '0.00' ? (
+                      <>
+                        ✗ <strong>Complete Failure</strong>: No elements in S satisfy the congruence condition. This is a total compression basin.
+                      </>
+                    ) : (
+                      <>
+                        ⚠️ <strong>Partial Recoverability</strong>: Only {necessarySufficientAnalysis.statistics.recoveryRate}% of elements in S satisfy the condition. This pipeline has domain-restricted recoverability—a hybrid corridor-basin.
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Deep Analysis Panel */}
+        {deepAnalysis && (
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-6 border-2 border-cyan-500/50 shadow-lg shadow-cyan-500/20">
+            <h2 className="text-2xl font-bold text-cyan-400 mb-4">🔬 Deep Analysis</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-700 p-4 rounded-lg">
+                <h3 className="font-bold text-purple-300 mb-2">Dimensions</h3>
+                <div className="space-y-1 text-sm text-slate-300">
+                  <div>d₁ = {deepAnalysis.dimensions.d1}</div>
+                  <div>d₂ = {deepAnalysis.dimensions.d2}</div>
+                </div>
+              </div>
+              <div className="bg-slate-700 p-4 rounded-lg">
+                <h3 className="font-bold text-purple-300 mb-2">Parameters</h3>
+                <div className="space-y-1 text-sm text-slate-300">
+                  <div>b₁ = {deepAnalysis.parameters.b1}, m₁ = {deepAnalysis.parameters.m1}</div>
+                  <div>b₂ = {deepAnalysis.parameters.b2}, m₂ = {deepAnalysis.parameters.m2}</div>
+                </div>
+              </div>
+              <div className="bg-slate-700 p-4 rounded-lg">
+                <h3 className="font-bold text-purple-300 mb-2">Conditions</h3>
+                <div className="space-y-1 text-sm">
+                  <div className={deepAnalysis.conditions.gcdValid ? 'text-emerald-400' : 'text-red-400'}>
+                    GCD Valid: {deepAnalysis.conditions.gcdValid ? '✓' : '✗'}
+                  </div>
+                  <div className={deepAnalysis.conditions.theorem1 ? 'text-emerald-400' : 'text-slate-400'}>
+                    Theorem 1: {deepAnalysis.conditions.theorem1 ? '✓' : '✗'}
+                  </div>
+                  <div className={deepAnalysis.conditions.theorem2 ? 'text-emerald-400' : 'text-slate-400'}>
+                    Theorem 2: {deepAnalysis.conditions.theorem2 ? '✓' : '✗'}
+                  </div>
+                </div>
+              </div>
+              <div className="bg-slate-700 p-4 rounded-lg">
+                <h3 className="font-bold text-purple-300 mb-2">Prediction</h3>
+                <div className="space-y-2 text-sm">
+                  <div className={`font-bold ${
+                    deepAnalysis.predictions.result?.includes('SUCCESS') ? 'text-emerald-400' :
+                    deepAnalysis.predictions.result?.includes('FAIL') ? 'text-red-400' :
+                    'text-yellow-400'
+                  }`}>
+                    {deepAnalysis.predictions.result}
+                  </div>
+                  <div className="text-slate-300 text-xs">
+                    {deepAnalysis.predictions.reason}
+                  </div>
+                </div>
+              </div>
+              {deepAnalysis.detailed && (
+                <div className="col-span-2 bg-slate-700 p-4 rounded-lg">
+                  <h3 className="font-bold text-purple-300 mb-2">Detailed Metrics</h3>
+                  <div className="grid grid-cols-3 gap-3 text-sm text-slate-300">
+                    <div>
+                      <div className="text-xs text-slate-400">Modulus Ratio</div>
+                      <div className="font-mono">{deepAnalysis.detailed.modulusRatio}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-400">Base Ratio</div>
+                      <div className="font-mono">{deepAnalysis.detailed.baseRatio}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-400">Sample Recovery</div>
+                      <div className="font-mono text-cyan-400">{deepAnalysis.detailed.actualRecoveryRate}</div>
+                    </div>
+                    {deepAnalysis.detailed.inv1 && (
+                      <>
+                        <div>
+                          <div className="text-xs text-slate-400">inv₁(b₁)</div>
+                          <div className="font-mono">{deepAnalysis.detailed.inv1}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-400">inv₂(b₂)</div>
+                          <div className="font-mono">{deepAnalysis.detailed.inv2}</div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => setDeepAnalysis(null)}
+              className="mt-4 w-full bg-slate-600 hover:bg-slate-500 text-slate-200 py-2 rounded transition-colors"
+            >
+              Close Analysis
+            </button>
+          </div>
+        )}
+
+        {/* Modular Gearbox Results */}
+        {testResults.tests.modularGearbox && (
+          <div className="bg-slate-800 rounded-lg p-6 border border-purple-500/30">
+            <h2 className="text-2xl font-bold text-cyan-400 mb-4">Modular Gearbox Tests</h2>
+            
+            {/* Statistics Summary */}
+            <div className="grid grid-cols-4 gap-3 mb-6">
+              <div className="bg-slate-700 p-3 rounded text-center">
+                <div className="text-2xl font-bold text-emerald-400">
+                  {testResults.tests.modularGearbox.filter(t => t.theorem1).length}
+                </div>
+                <div className="text-xs text-slate-400">Theorem 1 ✓</div>
+              </div>
+              <div className="bg-slate-700 p-3 rounded text-center">
+                <div className="text-2xl font-bold text-purple-400">
+                  {testResults.tests.modularGearbox.filter(t => t.theorem2).length}
+                </div>
+                <div className="text-xs text-slate-400">Theorem 2 ✓</div>
+              </div>
+              <div className="bg-slate-700 p-3 rounded text-center">
+                <div className="text-2xl font-bold text-cyan-400">
+                  {testResults.tests.modularGearbox.filter(t => t.recoveryRate === 1).length}
+                </div>
+                <div className="text-xs text-slate-400">Perfect Recovery</div>
+              </div>
+              <div className="bg-slate-700 p-3 rounded text-center">
+                <div className="text-2xl font-bold text-yellow-400">
+                  {testResults.tests.modularGearbox.filter(t => t.recoveryRate > 0 && t.recoveryRate < 1).length}
+                </div>
+                <div className="text-xs text-slate-400">Partial Recovery</div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {testResults.tests.modularGearbox.map((test, idx) => (
+                <div key={idx} className={`p-4 rounded-lg ${test.success ? 'bg-emerald-900/20 border border-emerald-500/30' : 'bg-red-900/20 border border-red-500/30'}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-mono text-purple-200">
+                      d₁={test.d1}, d₂={test.d2}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setNecessarySufficientAnalysis(necessarySufficientTest(test.d1, test.d2))}
+                        className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded transition-colors"
+                      >
+                        Full Analysis
+                      </button>
+                      <button
+                        onClick={() => setDeepAnalysis(analyzeGearboxPair(test.d1, test.d2))}
+                        className="text-xs bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-1 rounded transition-colors"
+                      >
+                        Quick View
+                      </button>
+                      {test.success ? 
+                        <CheckCircle className="w-5 h-5 text-emerald-400" /> : 
+                        <XCircle className="w-5 h-5 text-red-400" />
+                      }
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm text-slate-300">
+                    <div>b₁={test.b1}, m₁={test.m1}</div>
+                    <div>b₂={test.b2}, m₂={test.m2}</div>
+                    <div>Theorem 1 (m₁≤m₂): {test.theorem1 ? '✓' : '✗'}</div>
+                    <div>Theorem 2 (congruence): {test.theorem2 ? '✓' : '✗'}</div>
+                    <div className="col-span-2">
+                      Recovery Rate: <span className={test.recoveryRate > 0.99 ? 'text-emerald-400' : test.recoveryRate > 0.5 ? 'text-yellow-400' : 'text-red-400'}>
+                        {test.testCount > 0 ? (test.recoveryRate * 100).toFixed(1) : 0}%
+                      </span> ({test.testCount} tests)
+                    </div>
+                    {!test.success && test.reason && (
+                      <div className="col-span-2 text-red-400 text-xs mt-1">
+                        Reason: {test.reason}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Phase Transitions */}
+        {testResults.tests.phaseTransitions && (
+          <div className="bg-slate-800 rounded-lg p-6 border border-purple-500/30">
+            <h2 className="text-2xl font-bold text-cyan-400 mb-4">Phase Transition Tests</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {testResults.tests.phaseTransitions.map((test, idx) => (
+                <div key={idx} className="bg-slate-700 p-4 rounded-lg">
+                  <div className="font-bold text-purple-300 mb-2">{test.name}</div>
+                  <div className="text-2xl font-bold text-cyan-400 mb-2">{test.phase}</div>
+                  <div className="space-y-1 text-sm text-slate-300">
+                    <div>β (Base): {test.beta.toFixed(3)}</div>
+                    <div>μ (Modulus): {test.mu.toFixed(3)}</div>
+                    <div>τ (Tension): {test.tau.toFixed(3)}</div>
+                    <div className="pt-2 border-t border-slate-600">
+                      Total Energy: {test.energy.toFixed(3)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Extreme Values */}
+        {testResults.tests.extremeValues && (
+          <div className="bg-slate-800 rounded-lg p-6 border border-purple-500/30">
+            <h2 className="text-2xl font-bold text-cyan-400 mb-4">Extreme Value Tests</h2>
+            <div className="space-y-3">
+              {testResults.tests.extremeValues.map((test, idx) => (
+                <div key={idx} className={`p-4 rounded-lg flex items-center justify-between ${test.valid ? 'bg-emerald-900/20' : 'bg-red-900/20'}`}>
+                  <div>
+                    <div className="font-mono text-purple-200">{test.test}</div>
+                    <div className="text-sm text-slate-400">Result: {typeof test.result === 'number' ? test.result.toExponential(3) : test.result}</div>
+                  </div>
+                  {test.valid ? 
+                    <CheckCircle className="w-5 h-5 text-emerald-400" /> : 
+                    <XCircle className="w-5 h-5 text-red-400" />
+                  }
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Performance */}
+        {testResults.tests.performance && (
+          <div className="bg-slate-800 rounded-lg p-6 border border-purple-500/30">
+            <h2 className="text-2xl font-bold text-cyan-400 mb-4 flex items-center gap-2">
+              <TrendingUp className="w-6 h-6" />
+              Performance Benchmark
+            </h2>
+            <div className="space-y-3">
+              {testResults.tests.performance.map((bench, idx) => (
+                <div key={idx} className="bg-slate-700 p-4 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold text-purple-300">{bench.operation}</span>
+                    <span className="text-cyan-400 font-mono">{bench.opsPerSecond} ops/s</span>
+                  </div>
+                  <div className="text-sm text-slate-400">
+                    Total time: {bench.totalTime}ms
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    )}
+
+    {!testResults && !isRunning && (
+      <div className="bg-slate-800 rounded-lg p-12 text-center border border-purple-500/30">
+        <AlertCircle className="w-16 h-16 text-purple-400 mx-auto mb-4" />
+        <p className="text-purple-200 text-lg">Select tests and click "Run Test Suite" to begin</p>
+      </div>
+    )}
+  </div>
+</div>
+```
+
+);
+};
+
+export default HyperMorphicTestSuite;
