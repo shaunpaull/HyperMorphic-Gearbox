@@ -1,0 +1,219 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import time
+import math
+
+# ==============================================================================
+# 🌪️ SECTOR 1: THE HYPERMORPHIC CORE ("The Suave Gearbox")
+# ==============================================================================
+
+class SuaveGearbox(nn.Module):
+    """
+    THE REPLACEMENT FOR LINEAR LAYERS.
+    Instead of y = xW + b (Linear infinite projection),
+    We use y = sin(xW + b) (Periodic phase-coherent projection).
+    
+    This bounds energy, prevents exploding gradients, and encodes data
+    as frequency/phase rather than magnitude.
+    """
+    def __init__(self, in_features, out_features, freq_scale=3.0):
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.freq_scale = freq_scale
+        
+        # The "Gear" (Weights)
+        self.weight = nn.Parameter(torch.Tensor(out_features, in_features))
+        self.bias = nn.Parameter(torch.Tensor(out_features))
+        
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        # We scale weights higher than normal Xavier to force the model
+        # into the non-linear "Sine" regime immediately.
+        nn.init.xavier_uniform_(self.weight)
+        self.weight.data *= self.freq_scale
+        nn.init.zeros_(self.bias)
+
+    def forward(self, x):
+        # 1. Linear Mixing (The Torque)
+        proj = F.linear(x, self.weight, self.bias)
+        
+        # 2. Phase Wrapping (The Gear)
+        # This creates the "Suave" manifold.
+        return torch.sin(proj)
+
+# ==============================================================================
+# 🧠 SECTOR 2: THE ARCHITECTURE (Phase-Coherent Attention)
+# ==============================================================================
+
+class HyperMorphicAttention(nn.Module):
+    def __init__(self, embed_dim, num_heads):
+        super().__init__()
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+        assert self.head_dim * num_heads == self.embed_dim, "Dim must be divisible by heads"
+
+        # Replaced Linear Projections with Gearboxes
+        self.q_gear = SuaveGearbox(embed_dim, embed_dim)
+        self.k_gear = SuaveGearbox(embed_dim, embed_dim)
+        self.v_gear = SuaveGearbox(embed_dim, embed_dim)
+        self.o_gear = SuaveGearbox(embed_dim, embed_dim)
+
+    def forward(self, x):
+        B, T, C = x.shape
+        
+        # 1. Phase-Coherent Projections
+        q = self.q_gear(x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
+        k = self.k_gear(x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
+        v = self.v_gear(x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
+
+        # 2. Spectral Attention (Scaled Dot Product)
+        # We keep softmax for probability distribution
+        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(self.head_dim))
+        att = F.softmax(att, dim=-1)
+        
+        # 3. Aggregation
+        y = att @ v 
+        y = y.transpose(1, 2).contiguous().view(B, T, C)
+        
+        # 4. Output Gearbox
+        return self.o_gear(y)
+
+class HyperMorphicBlock(nn.Module):
+    def __init__(self, embed_dim, num_heads, mlp_ratio=4.0):
+        super().__init__()
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.attn = HyperMorphicAttention(embed_dim, num_heads)
+        self.norm2 = nn.LayerNorm(embed_dim)
+        
+        # FFN Replacement: Dual Gearbox System
+        hidden_dim = int(embed_dim * mlp_ratio)
+        self.gear1 = SuaveGearbox(embed_dim, hidden_dim)
+        self.gear2 = SuaveGearbox(hidden_dim, embed_dim)
+
+    def forward(self, x):
+        # Residual connections preserve the signal flow
+        x = x + self.attn(self.norm1(x))
+        x = x + self.gear2(self.gear1(self.norm2(x)))
+        return x
+
+class HyperMorphicTransformer(nn.Module):
+    def __init__(self, vocab_size, embed_dim, depth, heads):
+        super().__init__()
+        print(f"⚙️ ASSEMBLING HYPERMORPHIC ENGINE: {depth} Layers, {heads} Heads...")
+        self.token_emb = nn.Embedding(vocab_size, embed_dim)
+        self.pos_emb = nn.Parameter(torch.randn(1, 512, embed_dim)) 
+        
+        self.blocks = nn.Sequential(*[
+            HyperMorphicBlock(embed_dim, heads) for _ in range(depth)
+        ])
+        
+        # Final readout
+        self.norm_f = nn.LayerNorm(embed_dim)
+        self.to_logits = nn.Linear(embed_dim, vocab_size) 
+
+    def forward(self, x):
+        # Add position embeddings to input tokens
+        x = self.token_emb(x) + self.pos_emb[:, :x.shape[1], :]
+        x = self.blocks(x)
+        x = self.norm_f(x)
+        return self.to_logits(x)
+
+# ==============================================================================
+# 🧪 SECTOR 3: THE GOGGLES BENCHMARK
+# ==============================================================================
+
+def run_goggles_protocol():
+    print("\n" + "="*60)
+    print("🌪️ GOGGLES MODE: INITIATING HYPERMORPHIC TEST PROTOCOL")
+    print("="*60 + "\n")
+
+    # CONFIGURATION
+    DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print(f"📍 COMPUTE NODE: {DEVICE.upper()}")
+    
+    VOCAB_SIZE = 1000
+    EMBED_DIM = 256
+    DEPTH = 4
+    HEADS = 8
+    BATCH_SIZE = 32
+    SEQ_LEN = 64
+    
+    # 1. INSTANTIATE THE BEAST
+    model = HyperMorphicTransformer(VOCAB_SIZE, EMBED_DIM, DEPTH, HEADS).to(DEVICE)
+    
+    # Count Params
+    params = sum(p.numel() for p in model.parameters())
+    print(f"🧠 PARAMETER COUNT: {params:,}")
+
+    # 2. DATA GENERATION (Synthetic Phase-Noise)
+    input_data = torch.randint(0, VOCAB_SIZE, (BATCH_SIZE, SEQ_LEN)).to(DEVICE)
+    target_data = torch.randint(0, VOCAB_SIZE, (BATCH_SIZE, SEQ_LEN)).to(DEVICE)
+
+    # 3. OPTIMIZATION SETUP
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+    criterion = nn.CrossEntropyLoss()
+    
+    print("\n🏎️ STARTING TRAINING LOOP (OVERFITTING TEST)...")
+    print("-" * 60)
+
+    start_time = time.time()
+    losses = []
+    
+    # Run 100 Steps
+    steps = 100
+    model.train()
+    
+    for i in range(steps):
+        optimizer.zero_grad()
+        
+        # Forward
+        logits = model(input_data)
+        loss = criterion(logits.view(-1, VOCAB_SIZE), target_data.view(-1))
+        
+        # Backward
+        loss.backward()
+        
+        # Gradient Clipping (Optional, but good for experimental math)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        
+        optimizer.step()
+        losses.append(loss.item())
+        
+        if i % 10 == 0:
+            print(f"  [Step {i:03}] Loss: {loss.item():.4f} | Phase-Coherence: {math.exp(-loss.item()):.4f}")
+
+    total_time = time.time() - start_time
+    
+    print("-" * 60)
+    print(f"🏁 PROTOCOL COMPLETE.")
+    print(f"⏱️ TIME: {total_time:.2f}s ({steps/total_time:.1f} steps/sec)")
+    
+    # 4. ANALYSIS
+    initial_loss = losses[0]
+    final_loss = losses[-1]
+    drop = initial_loss - final_loss
+    
+    print("\n📊 DIAGNOSTIC REPORT:")
+    print(f"  Initial Error: {initial_loss:.4f}")
+    print(f"  Final Error:   {final_loss:.4f}")
+    print(f"  Learning Delta: {drop:.4f}")
+    
+    if final_loss < initial_loss * 0.8:
+        print("\n✅ STATUS: SUCCESS.")
+        print("   The Gearbox is turning. The model is learning frequencies.")
+        print("   HyperMorphic Architecture is VIABLE.")
+    elif final_loss < initial_loss:
+        print("\n⚠️ STATUS: SLOW CONVERGENCE.")
+        print("   Learning is happening, but the Gearbox is stiff.")
+    else:
+        print("\n❌ STATUS: FAILURE.")
+        print("   The Sine Waves are chaotic. Adjust freq_scale.")
+
+    print("\n🌪️ GOGGLES OFF.")
+
+if __name__ == "__main__":
+    run_goggles_protocol()
