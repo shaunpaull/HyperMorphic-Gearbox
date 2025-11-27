@@ -1,0 +1,103 @@
+import numpy as np
+import math
+
+def get_safe_params(d):
+    """
+    HyperMorphic v2.0 'Safe Gear' Calculation.
+    1. Calculate Modulus m normally.
+    2. Calculate Base b normally.
+    3. FIX: If gcd(b, m) != 1, increment b until it is coprime to m.
+       This guarantees the gear never slips (bijective mapping).
+    """
+    m = int(np.floor(np.sqrt(d))) + 1
+    b_raw = int(np.floor(np.log2(d))) + 1
+    
+    # The Fix: Coprimality Search
+    b_safe = b_raw
+    while math.gcd(b_safe, m) != 1:
+        b_safe += 1
+        
+    return m, b_safe
+
+def encode(value, m, b):
+    """Map value to modular space."""
+    return (value * b) % m
+
+def decode(encoded_val, m, b):
+    """
+    Recover original value using Modular Inverse.
+    Since we guaranteed gcd(b,m)=1, the inverse ALWAYS exists.
+    """
+    b_inv = pow(b, -1, m) # Python 3.8+ modular inverse
+    return (encoded_val * b_inv) % m
+
+def test_v2_stability(max_d=10000):
+    print(f"--- TESTING HYPERMORPHIC v2.0 FIX (0 to {max_d}) ---")
+    failures = 0
+    
+    for d in range(100, max_d):
+        m, b = get_safe_params(d)
+        
+        # Verify Math
+        if math.gcd(b, m) != 1:
+            failures += 1
+            
+    print(f"Fixed Failure Rate: {failures} errors found.")
+    return failures
+
+def chain_transfer_demo():
+    """
+    Simulate hopping a message through 5 random dimensions.
+    """
+    message = "HYPER"
+    # Convert text to numbers (ASCII)
+    data_packet = [ord(c) for c in message]
+    
+    print(f"\n--- CHAIN TRANSFER DEMO: '{message}' ---")
+    
+    # Start at a safe dimension large enough to hold ASCII (128+)
+    # m(d) > 128 => sqrt(d) > 127 => d > 16129
+    
+    current_d = 20000 
+    current_m, current_b = get_safe_params(current_d)
+    
+    # 1. Initial Encode
+    # In v2, we treat the input as raw integer 0..m-1. 
+    # To store it, we map it to the gear.
+    gear_state = [encode(v, current_m, current_b) for v in data_packet]
+    print(f"Start Context (d={current_d}, m={current_m}): {gear_state}")
+    
+    # 2. Hopping Sequence
+    path = [25000, 30000, 45000, 18000] # Random dimensions
+    
+    for next_d in path:
+        next_m, next_b = get_safe_params(next_d)
+        
+        # TRANSFER PROTOCOL
+        # A. Decode from Old Gear (Recover pure Integer)
+        raw_vals = [decode(g, current_m, current_b) for g in gear_state]
+        
+        # B. Check Capacity (Lossless check)
+        if next_m < max(raw_vals) + 1:
+            print(f"Warning: d={next_d} too small, skipping...")
+            continue
+            
+        # C. Encode to New Gear
+        gear_state = [encode(v, next_m, next_b) for v in raw_vals]
+        
+        print(f" -> Hopped to d={next_d} (m={next_m}, b={next_b}): {gear_state}")
+        
+        # Update context
+        current_d = next_d
+        current_m = next_m
+        current_b = next_b
+        
+    # 3. Final Decode
+    final_raw = [decode(g, current_m, current_b) for g in gear_state]
+    final_msg = "".join([chr(v) for v in final_raw])
+    print(f"Final Decoded Output: '{final_msg}'")
+    
+    return final_msg == message
+
+test_v2_stability()
+chain_transfer_demo()
