@@ -487,3 +487,103 @@ If you use this code in research, please cite the preprint:
 
 Paull, S. (2025). A HyperMorphic Toy Model of Black-Hole Information Retention: Unitary Dimensional Collapse via Dynamic Modular Gears. HyperMorphic Research.
 "The universe does not collapse; it winds." 🌪️
+
+
+
+
+
+A constructive computational proof of Unitary Holography, Quantum Error Correction, and Topological Circuit Synthesis.
+
+This repository contains the reference implementation for HyperMorphic Theory. It demonstrates that "Data Loss" and "Entropy" are geometric artifacts that can be resolved by treating information as a Liquid Winding Number rather than a static state.
+
+🚀 Latest Breakthroughs (v2.0 - v5.0)
+We have expanded the framework from a single-layer Black Hole model to a full-stack Quantum Holographic architecture.
+
+1. The Holographic Tensor Bridge (didactic_holographic_tensor_bridge.py)
+The Theory: Unifies Error Correcting Codes (ECC), Secret Sharing, and AdS/CFT Holography.
+The Proof: Implements Subregion Duality.
+We project a Bulk State onto 10 Boundary Shards.
+Result: Any subregion covering >50% of the boundary recovers the bulk exactly. Any subregion <50% sees only mathematical chaos.
+Implication: Information is non-local; it exists in the topology of the collection, not the individual shards.
+2. Quantum HyperMorphic MERA (quantum_hypermorphic_mera.py)
+The Theory: A Multi-scale Entanglement Renormalization Ansatz (MERA) using genuine quantum degrees of freedom (Hilbert Spaces).
+The Proof: Verifies Ryu-Takayanagi Entropy.
+Simulates a hierarchical tensor network (Deep Bulk 
+→
+→
+Shallow Bulk 
+→
+→
+ Boundary).
+Result: Entanglement entropy (
+S
+A
+S 
+A
+​	
+ 
+) shows discrete jumps exactly when the "Minimal Surface" captures a bulk node.
+Implication: Confirms that HyperMorphic winding generates "Volume Law" entanglement that renormalizes into "Area Law" boundaries.
+3. The HyperMorphic Quantum Compiler (hypermorphic_compiler.py)
+The Theory: Translates abstract Gear Topology (
+m
+,
+b
+m,b
+) into executable Quantum Circuits.
+The Proof: Explicit Gate Decomposition.
+Maps Winding Number (
+b
+b
+) 
+→
+→
+ CNOT Stride (Connectivity).
+Maps Modulus (
+m
+m
+) 
+→
+→
+ Phase Rotation (Geometry).
+Includes a Variational Auto-Tuner that learns the optimal topology to maximize entanglement on a 4-qubit register.
+Result: Generates copy-paste executable code for IBM/Rigetti quantum processors.
+📂 Repository Structure
+File	Description	Scientific Domain
+hypermorphic_core.py	The "SafeGear" primitive. Handles Coprimality logic and Space-Time compression.	Number Theory
+black_hole_simulation.py	Simulates Unitary collapse of a Star (
+d
+=
+10
+12
+d=10 
+12
+ 
+) into a Singularity (
+d
+=
+100
+d=100
+).	High-Energy Physics
+didactic_holographic_tensor_bridge.py	Proves 50% erasure tolerance and reconstruction thresholds.	Error Correction
+quantum_hypermorphic_mera.py	Simulates hierarchical entanglement entropy in a tensor network.	Quantum Mechanics
+hypermorphic_compiler.py	Compiles abstract topology into H, Rz, CX gate sequences.	Quantum Engineering
+🌪️ Mechanical Holography
+Visualizing the Space-Time Tradeoff
+
+The system functions as a Mechanical Spirograph. When spatial capacity is reduced (Gravity), the system automatically expands the temporal sequence (Time) to preserve Unitarity.
+
+"Space is just the canvas. Time is the winding number."
+(See /visualizations folder for high-resolution renders of the Flux Manifold and Cylinder Topology).
+
+📜 Citations & Papers
+This repository supports the following preprints:
+
+A HyperMorphic Toy Model of Black-Hole Information Retention (Time/Space Tradeoff)
+The HyperMorphic Tensor Bridge (Holographic Error Correction)
+HyperMorphic Quantum Compiler v5.0 (Topological Circuit Synthesis)
+Citation Format:
+
+Paull, S. (2025). HyperMorphic Theory: Unitary Dimensional Collapse via Dynamic Modular Gears. HyperMorphic Research.
+[HyperMorphic Research]
+Code is Law. Geometry is Absolute.
