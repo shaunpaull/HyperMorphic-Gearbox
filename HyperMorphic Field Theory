@@ -1,0 +1,216 @@
+"""
+HYPERMORPHIC FIELD THEORY (HMFT v1.0)
+-------------------------------------
+Simulating Full Backreaction between Scalar Fields and Topological Winding.
+
+Physics Engine:
+1. Hamiltonian: H = Integral [ 1/2 pi^2 + 1/2 (Grad_b phi)^2 + V(phi) ]
+2. Modified Laplacian: The gradient is defined by the local Winding Number b(x).
+   Grad_b phi ~ phi(x+b) - phi(x)
+3. Einstein-Gear Equation: The geometry (b) evolves based on the Stress-Energy Tensor T_00.
+   b(x, t) = f( T_00(x, t) )
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy.sparse
+from dataclasses import dataclass
+
+# --- CONFIGURATION ---
+GRID_SIZE = 512   # Spatial resolution
+DT = 0.05         # Time step
+STEPS = 1000      # Simulation duration
+COUPLING_G = 50.0 # Strength of Backreaction (Gravity)
+
+@dataclass
+class FieldState:
+    phi: np.ndarray # Field amplitude
+    pi:  np.ndarray # Conjugate momentum (d_phi/dt)
+    b:   np.ndarray # Local Winding Number field
+
+class HyperMorphicVacuum:
+    def __init__(self, size):
+        self.N = size
+        self.dx = 1.0
+        
+        # Initialize Vacuum Geometry (Flat Space)
+        # b=1 means Nearest Neighbor (Standard Physics)
+        self.b_field = np.ones(size, dtype=int)
+        
+    def compute_energy_density(self, state: FieldState):
+        """
+        Calculates T_00 (Energy Density).
+        T_00 = 1/2 pi^2 + 1/2 (nabla phi)^2 + Potential
+        """
+        kinetic = 0.5 * state.pi**2
+        
+        # Gradient term depends on LOCAL winding
+        # For energy calculation, we use the standard metric approximation
+        # to represent 'mass', but dynamics use the winding.
+        grad_phi = np.gradient(state.phi)
+        gradient_E = 0.5 * grad_phi**2
+        
+        # Mass term (Potential) V = 1/2 m^2 phi^2
+        potential = 0.5 * 1.0 * state.phi**2
+        
+        return kinetic + gradient_E + potential
+
+    def update_geometry(self, energy_density):
+        """
+        The Einstein-Gear Equation.
+        Matter (Energy) -> Dimension -> Winding.
+        """
+        # 1. Effective Dimension d ~ 1 + G * Energy
+        # High Energy = High Complexity
+        d_eff = 1.0 + COUPLING_G * energy_density
+        
+        # 2. HyperMorphic Winding Relation
+        # b = log2(d) + coprime_shift
+        # We perform this element-wise
+        
+        new_b = np.floor(np.log2(np.maximum(1.0, d_eff))).astype(int) + 1
+        
+        # Enforce Coprimality? 
+        # In QFT on a lattice, 'm' is the grid size N.
+        # We need gcd(b, N) = 1 for the permutation to be bijective (unitary).
+        
+        for i in range(self.N):
+            val = new_b[i]
+            # Stability limit: Don't wind more than N/2 (Aliasing)
+            if val >= self.N // 2: val = (self.N // 2) - 1
+            
+            # Coprimality Patch
+            while np.gcd(val, self.N) != 1:
+                val += 1
+            new_b[i] = val
+            
+        return new_b
+
+    def hyper_laplacian(self, phi, b_field):
+        """
+        Computes Laplacian using variable winding connectivity.
+        Delta phi(x) = phi(x + b(x)) + phi(x - b(x)) - 2phi(x)
+        """
+        # This represents the "Force" term in the wave equation.
+        # It couples x to x+b.
+        
+        # Construct indices
+        indices = np.arange(self.N)
+        
+        # Forward neighbors: (i + b_i) % N
+        idx_plus = (indices + b_field) % self.N
+        # Backward neighbors: (i - b_i) % N
+        idx_minus = (indices - b_field) % self.N
+        
+        phi_plus = phi[idx_plus]
+        phi_minus = phi[idx_minus]
+        
+        return (phi_plus + phi_minus - 2*phi) / (self.dx**2)
+
+class Solver:
+    def __init__(self):
+        self.vacuum = HyperMorphicVacuum(GRID_SIZE)
+        
+    def initialize_wavepacket(self):
+        """Creates a Gaussian Gaussian particle."""
+        x = np.arange(GRID_SIZE)
+        mu = GRID_SIZE // 4
+        sigma = 20.0
+        phi = np.exp(-(x - mu)**2 / (2 * sigma**2))
+        pi = np.zeros_like(phi) # Start at rest
+        b = np.ones(GRID_SIZE, dtype=int)
+        return FieldState(phi, pi, b)
+
+    def evolve(self):
+        state = self.initialize_wavepacket()
+        
+        history_phi = []
+        history_b = []
+        
+        print("Running HyperMorphic Field Theory Simulation...")
+        
+        for t in range(STEPS):
+            # 1. COMPUTE BACKREACTION (Geometry Update)
+            energy = self.vacuum.compute_energy_density(state)
+            state.b = self.vacuum.update_geometry(energy)
+            
+            # 2. COMPUTE FORCES (HyperMorphic Laplacian)
+            # The topology of space changes instantly based on b
+            force = self.vacuum.hyper_laplacian(state.phi, state.b)
+            
+            # 3. SYMPLECTIC INTEGRATION (Leapfrog)
+            # Update Momentum (Half step)
+            state.pi += 0.5 * DT * force
+            
+            # Update Position (Full step)
+            state.phi += DT * state.pi
+            
+            # Re-compute force (Geometry doesn't change during step for symplectic consistency)
+            # Or should it? For rigorous energy conservation, geometry is potential.
+            # We treat geometry as 'slow' variable for this step.
+            force_new = self.vacuum.hyper_laplacian(state.phi, state.b)
+            
+            # Update Momentum (Half step)
+            state.pi += 0.5 * DT * force_new
+            
+            # Apply Damping (Hubble Friction simulation / Stability)
+            state.pi *= 0.995 
+            
+            # Store
+            if t % 2 == 0:
+                history_phi.append(state.phi.copy())
+                history_b.append(state.b.copy())
+                
+        return np.array(history_phi), np.array(history_b)
+
+# --- EXECUTION & VISUALIZATION ---
+
+def run_hmft():
+    solver = Solver()
+    field_data, geo_data = solver.evolve()
+    
+    # Plotting
+    plt.style.use('dark_background')
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
+    
+    # 1. FIELD EVOLUTION (Matter)
+    # The Wavefunction
+    im1 = ax1.imshow(field_data.T, aspect='auto', cmap='magma', origin='lower',
+                     extent=[0, STEPS, 0, GRID_SIZE])
+    ax1.set_ylabel("Space (Lattice Site)")
+    ax1.set_title("Matter Field $\phi(x,t)$: The Wavepacket")
+    plt.colorbar(im1, ax=ax1, label="Amplitude")
+    
+    # 2. GEOMETRY EVOLUTION (Topology)
+    # The Winding Number b(x,t)
+    im2 = ax2.imshow(geo_data.T, aspect='auto', cmap='cool', origin='lower',
+                     extent=[0, STEPS, 0, GRID_SIZE], vmin=1, vmax=10)
+    ax2.set_ylabel("Space (Lattice Site)")
+    ax2.set_xlabel("Time (Steps)")
+    ax2.set_title("Emergent Geometry $b(x,t)$: The Winding Stride")
+    cbar = plt.colorbar(im2, ax=ax2, label="Winding Number (Connectivity)")
+    
+    plt.tight_layout()
+    plt.savefig('hmft_simulation.png')
+    print("Simulation Complete. Data saved to 'hmft_simulation.png'.")
+    
+    # Check for "Teleportation" events
+    # If the wavepacket appears in unconnected regions due to high 'b'
+    max_winding = np.max(geo_data)
+    print(f"Maximum Topological Distortion: b = {max_winding}")
+    if max_winding > 1:
+        print(">> BACKREACTION CONFIRMED.")
+        print("   Matter density warped spatial connectivity.")
+        print(f"   Space became non-local (Max Stride: {max_winding} sites).")
+
+if __name__ == "__main__":
+    run_hmft()
+
+
+Running HyperMorphic Field Theory Simulation...
+Simulation Complete. Data saved to 'hmft_simulation.png'.
+Maximum Topological Distortion: b = 5
+>> BACKREACTION CONFIRMED.
+   Matter density warped spatial connectivity.
+   Space became non-local (Max Stride: 5 sites).
+
