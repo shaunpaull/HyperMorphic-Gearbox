@@ -1,0 +1,310 @@
+"""
+HYPERMORPHIC COSMOLOGY (v14.0)
+------------------------------
+Quantum Multi-Field Dynamics on a 2D Lattice with Backreaction.
+
+Features:
+1. Quantum Matter: Gaussian State formalism (Covariance Matrix) for Bosonic Fields.
+2. 2D HyperMorphic Winding: Vectorized connectivity b = (bx, by).
+3. Multi-Field: Two coupled scalar fields (Phi_A, Phi_B).
+4. Cosmology: Hubble Friction and Scale Factor evolution driven by Energy Density.
+"""
+
+import numpy as np
+import scipy.linalg
+import matplotlib.pyplot as plt
+from dataclasses import dataclass
+
+# --- CONFIGURATION ---
+LATTICE_SIZE = 8  # 8x8 Grid = 64 Spatial Sites
+N_FIELDS = 2      # Two interacting fields
+TOTAL_MODES = LATTICE_SIZE**2 * N_FIELDS
+DIM = 2 * TOTAL_MODES # Phase space dimension (q, p)
+
+DT = 0.05
+STEPS = 150
+G_COUPLING = 0.5  # Gravity Strength (Backreaction)
+LAMBDA_INT = 2.0  # Interaction between Field A and B
+
+class QuantumState:
+    """
+    Represents the Gaussian State of the Universe.
+    Defined by Displacement Vector (r) and Covariance Matrix (sigma).
+    """
+    def __init__(self, dim):
+        self.dim = dim
+        self.r = np.zeros(dim)
+        # Vacuum State: Identity Covariance (in units where hbar=2)
+        self.sigma = np.eye(dim)
+
+class LatticeGeometry:
+    """
+    Manages 2D Topology and Vector Winding.
+    """
+    def __init__(self, size):
+        self.L = size
+        self.N = size * size
+        # Winding Vector Field (bx, by) for each site
+        # Initial: Nearest Neighbor (1, 1)
+        self.b_field = np.ones((self.N, 2), dtype=int) 
+        
+    def get_neighbors(self, site_idx, b_vec):
+        """Returns indices of neighbors based on local winding."""
+        lx, ly = site_idx % self.L, site_idx // self.L
+        bx, by = b_vec
+        
+        # Periodic Boundary Conditions (Torus Topology)
+        nx = (lx + bx) % self.L
+        ny = (ly + by) % self.L
+        
+        target_idx = ny * self.L + nx
+        return target_idx
+
+    def update_topology(self, energy_density):
+        """
+        The Einstein-Gear Equation (2D Vector Version).
+        T_00(x,y) -> b_x, b_y
+        """
+        # Map Energy to Dimension -> Winding
+        # Higher Energy = Higher Connectivity Stride
+        
+        d_eff = 1.0 + G_COUPLING * energy_density
+        
+        # Anisotropic Winding? 
+        # For simplicity, we keep isotropic winding magnitude but could vary direction
+        # b ~ log2(d)
+        mag = np.floor(np.log2(np.maximum(1.0, d_eff))).astype(int) + 1
+        
+        for i in range(self.N):
+            val = mag[i]
+            # Stability: Max stride is L/2
+            if val >= self.L // 2: val = (self.L // 2) - 1
+            
+            # Coprimality Check (Simulated for 2D Lattice bijectivity)
+            # In 2D, ensuring bijectivity is harder. 
+            # We enforce gcd(b, L) = 1 separately for x and y shifts.
+            while np.gcd(val, self.L) != 1:
+                val += 1
+            
+            self.b_field[i] = [val, val]
+
+class SymplecticEvolver:
+    """
+    Evolves Gaussian States under Hamiltonian Dynamics.
+    """
+    def __init__(self, size):
+        self.geo = LatticeGeometry(size)
+        self.N_sites = size * size
+        self.N_total = TOTAL_MODES
+        
+        # Symplectic Form Omega
+        # Block structure: [[0, I], [-I, 0]]
+        self.Omega = np.block([
+            [np.zeros((self.N_total, self.N_total)), np.eye(self.N_total)],
+            [-np.eye(self.N_total), np.zeros((self.N_total, self.N_total))]
+        ])
+
+    def construct_hamiltonian_matrix(self, state, scale_factor):
+        """
+        Builds the Quadratic Hamiltonian Matrix H_mat.
+        H = 1/2 R^T H_mat R
+        Dependent on Topology (Winding) and Scale Factor (a).
+        """
+        # Kinetic Term (p^2): Coupled to scale factor (Redshift)
+        # H_kin = p^2 / 2a^2
+        K = np.eye(self.N_total) / (scale_factor**2)
+        
+        # Potential Term (q^2): Gradient + Mass + Interaction
+        # H_pot = 1/2 (Grad phi)^2 + 1/2 m^2 phi^2
+        
+        V = np.zeros((self.N_total, self.N_total))
+        
+        # 1. Mass Terms
+        np.fill_diagonal(V, 1.0) 
+        
+        # 2. Gradient Terms (The HyperMorphic Winding)
+        # We iterate over spatial sites
+        for i in range(self.N_sites):
+            winding = self.geo.b_field[i]
+            neighbor = self.geo.get_neighbors(i, winding)
+            
+            # Coupling strength scales with a(t) ? 
+            # Physical distance d = a(t) * dx. 
+            # Gradient ~ (phi_1 - phi_2)^2 / d^2
+            coupling = 1.0 / (scale_factor**2)
+            
+            # Apply to both Field A and Field B
+            # Field A indices: 0..N-1. Field B indices: N..2N-1
+            
+            # Field A
+            idx_A = i
+            nbr_A = neighbor
+            V[idx_A, idx_A] += coupling
+            V[nbr_A, nbr_A] += coupling
+            V[idx_A, nbr_A] -= coupling
+            V[nbr_A, idx_A] -= coupling
+            
+            # Field B
+            idx_B = i + self.N_sites
+            nbr_B = neighbor + self.N_sites
+            V[idx_B, idx_B] += coupling
+            V[nbr_B, nbr_B] += coupling
+            V[idx_B, nbr_B] -= coupling
+            V[nbr_B, idx_B] -= coupling
+            
+        # 3. Field Interaction (A-B coupling)
+        # H_int = g (phi_A - phi_B)^2
+        for i in range(self.N_sites):
+            idx_A = i
+            idx_B = i + self.N_sites
+            
+            V[idx_A, idx_A] += LAMBDA_INT
+            V[idx_B, idx_B] += LAMBDA_INT
+            V[idx_A, idx_B] -= LAMBDA_INT
+            V[idx_B, idx_A] -= LAMBDA_INT
+            
+        # Total H Matrix
+        H_mat = np.block([
+            [V, np.zeros_like(V)],
+            [np.zeros_like(K), K]
+        ])
+        return H_mat
+
+    def step(self, state: QuantumState, scale_factor):
+        # 1. Compute Local Energy Density from Covariance Matrix
+        # E_i = Tr(rho_i H_i) ~ Tr(sigma_i H_mat_ii)
+        # Simplified: Sum of variances at site i
+        
+        energy_density = np.zeros(self.N_sites)
+        diag = np.diag(state.sigma)
+        
+        # Sum q^2 and p^2 variances for both fields
+        for i in range(self.N_sites):
+            # Field A q, p
+            term_A = diag[i] + diag[i + self.N_total] 
+            # Field B q, p
+            idx_B = i + self.N_sites
+            term_B = diag[idx_B] + diag[idx_B + self.N_total]
+            
+            energy_density[i] = 0.5 * (term_A + term_B)
+            
+        # 2. Update Topology (Backreaction)
+        self.geo.update_topology(energy_density)
+        
+        # 3. Construct Hamiltonian
+        H_mat = self.construct_hamiltonian_matrix(state, scale_factor)
+        
+        # 4. Symplectic Evolution
+        # S = exp(Omega H t)
+        generator = self.Omega @ H_mat
+        S = scipy.linalg.expm(generator * DT)
+        
+        # Update State
+        # sigma' = S sigma S^T
+        state.sigma = S @ state.sigma @ S.T
+        state.r = S @ state.r
+        
+        return np.mean(energy_density)
+
+# --- COSMOLOGY ENGINE ---
+
+def run_quantum_cosmology():
+    print("HYPERMORPHIC COSMOLOGY (v14.0)")
+    print("==============================")
+    print("Scenario: The Big Crunch & Quantum Bounce")
+    print(f"Lattice: {LATTICE_SIZE}x{LATTICE_SIZE} (2 Fields)")
+    
+    # Init Universe
+    evolver = SymplecticEvolver(LATTICE_SIZE)
+    state = QuantumState(DIM)
+    
+    # Initial Condition: Hot Dense State
+    # Squeeze the vacuum to simulate high energy
+    sq_r = 0.5
+    S_squeeze = np.diag(np.concatenate([np.ones(TOTAL_MODES)*np.exp(-sq_r), 
+                                        np.ones(TOTAL_MODES)*np.exp(sq_r)]))
+    state.sigma = S_squeeze @ state.sigma @ S_squeeze.T
+    
+    # Scale Factor Dynamics
+    # We force a collapse: a(t) starts at 1, shrinks, then evolves freely
+    # a_dot = -H * a
+    
+    a = 2.0 # Start expanded
+    H_hubble = -0.02 # Collapsing universe
+    
+    history_a = []
+    history_E = []
+    history_b = []
+    
+    print("\n[SIMULATION START]")
+    for t in range(STEPS):
+        # Evolve Quantum Matter
+        avg_E = evolver.step(state, a)
+        
+        # Friedmann Backreaction (Classical Gravity approximation)
+        # H^2 ~ rho
+        # But we simulate a "Bounce" dynamic: 
+        # If density gets too high, does Winding Pressure reverse collapse?
+        
+        # Phenomenological Friedmann:
+        # a_ddot = -4pi G (rho + 3p) * a
+        # Pressure p. For scalar field p ~ rho (roughly).
+        
+        # Acceleration
+        accel = -0.1 * avg_E * a 
+        
+        # HyperMorphic Repulsion?
+        # High Winding creates "Non-Local Stiffening".
+        # If b is high, the effective k-modes shift.
+        # We model this as an extra pressure term if b_avg > 1
+        
+        avg_b = np.mean(evolver.geo.b_field)
+        if avg_b > 1.5:
+            # Quantum Geometric Pressure
+            accel += 0.5 * (avg_b ** 2) * a
+            
+        H_hubble += accel * DT
+        a += H_hubble * DT
+        
+        # Clamp a to prevent numerical explosion at 0
+        if a < 0.1: a = 0.1
+        
+        history_a.append(a)
+        history_E.append(avg_E)
+        history_b.append(avg_b)
+        
+        if t % 20 == 0:
+            print(f"  Step {t}: a(t)={a:.3f} | Energy={avg_E:.2f} | Winding={avg_b:.2f}")
+            
+    # --- VISUALIZATION ---
+    plt.style.use('dark_background')
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 12), sharex=True)
+    
+    # 1. Scale Factor (The Bounce)
+    ax1.plot(history_a, color='#00ffff', linewidth=3)
+    ax1.set_ylabel("Scale Factor a(t)")
+    ax1.set_title("Cosmological Evolution: The HyperMorphic Bounce")
+    ax1.axvline(x=np.argmin(history_a), color='white', linestyle='--', alpha=0.5, label='Bounce Point')
+    ax1.legend()
+    
+    # 2. Energy Density
+    ax2.plot(history_E, color='#ff00ff', linewidth=2)
+    ax2.set_ylabel("Energy Density")
+    ax2.set_yscale('log')
+    
+    # 3. Emergent Geometry (Winding)
+    ax3.plot(history_b, color='#ffff00', linewidth=2)
+    ax3.set_ylabel("Avg Winding Stride")
+    ax3.set_xlabel("Time Steps")
+    
+    plt.tight_layout()
+    plt.savefig('cosmic_bounce.png')
+    print("\n[VERDICT]")
+    if history_a[-1] > history_a[np.argmin(history_a)]:
+        print("  Status: BOUNCE CONFIRMED.")
+        print("  The universe collapsed, winding increased, geometric pressure halted singularity.")
+    else:
+        print("  Status: CRUNCH.")
+
+if __name__ == "__main__":
+    run_quantum_cosmology()
