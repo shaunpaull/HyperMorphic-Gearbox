@@ -1,0 +1,247 @@
+"""
+HYPERMORPHIC GENESIS (v13.0) - CRITICAL TUNING
+----------------------------------------------
+Simulating a Scale-Invariant Universe via Golden Ratio Winding.
+
+Objective:
+Tune the CosmicGear to produce a 'Critical' Power Spectrum (1/r decay),
+matching the observed physics of our actual universe (CFT/AdS).
+
+Changelog:
+1. Winding: Replaced Integer steps with Golden Ratio Phase (Irrational Winding).
+2. Mixing: Implemented Dense Isometry (Haar-like) to break Tree Isolation.
+3. Analysis: Log-Log analysis to confirm Power Law behavior.
+"""
+
+import numpy as np
+import scipy.linalg
+import matplotlib.pyplot as plt
+
+# --- TUNED PHYSICS ENGINE ---
+
+class CriticalGear:
+    """
+    A Gear tuned to the 'Critical Point' between Order and Chaos.
+    """
+    def __init__(self, time_t):
+        # The Golden Ratio (The most irrational number)
+        # Prevents resonance loops in the winding
+        self.phi = (1 + np.sqrt(5)) / 2
+        
+        # Winding 'b' is now a phase factor, not just an integer stride
+        # We decrease mixing over time (Cooling Universe)
+        self.mix_strength = np.pi / (2.0 + 0.5*time_t) 
+        
+    def get_isometry(self):
+        """
+        Creates a Dense Isometry V: 2 -> 4.
+        """
+        dim_out = 4
+        dim_in = 2
+        
+        # 1. Start with Identity
+        U = np.eye(dim_out, dtype=complex)
+        
+        # 2. Apply Golden Ratio Winding (Geometric Phase)
+        # This smears the information across the basis
+        for k in range(dim_out):
+            # Phase = 2*pi * k * Phi
+            theta = 2 * np.pi * k * self.phi
+            U[k, k] = np.exp(1j * theta)
+            
+        # 3. Dense Mixing (The "Liquid" Step)
+        # Instead of a simple DFT, we apply a rotation that mixes
+        # |0> with |1>, |2>, |3> weighted by the mix_strength.
+        
+        # Construct a simple rotation generator (Hamiltonian)
+        # H_mix connects all states
+        H_mix = np.ones((dim_out, dim_out)) - np.eye(dim_out)
+        
+        # Unitary evolution U_mix = exp(-i * strength * H)
+        U_mix = scipy.linalg.expm(-1j * self.mix_strength * H_mix)
+        
+        U = U_mix @ U
+        
+        # Extract Isometry (First 2 columns)
+        V = U[:, :dim_in]
+        return V
+
+class CriticalGenesis:
+    def __init__(self, n_generations):
+        self.generations = n_generations
+        self.n_qubits = 2**n_generations
+        # Start |0>
+        self.state = np.array([1.0, 0.0], dtype=complex)
+        
+    def run(self):
+        current_n = 1
+        
+        for g in range(self.generations):
+            # Use Critical Gear
+            gear = CriticalGear(time_t=g)
+            V = gear.get_isometry()
+            
+            # Apply to Homogeneous Universe
+            # Kronecker Expansion
+            # Optimization: 
+            # V_total = V (x) V ... (x) V
+            # Note: For N=16 (g=4), final matrix is 65536 x ... large.
+            # But we apply to a vector. 
+            # state_new = V_total @ state
+            
+            # Efficient tensor update:
+            # Reshape state to (current_n, 1) or similar? No.
+            # State has size 2^current_n.
+            # New State has size 2^(current_n * 2) ? 
+            # Wait, MERA 1->2 branching means N doubles. 
+            # V is 4x2. 
+            # If we have 1 site (dim 2), V maps to 2 sites (dim 4).
+            # If we have k sites (dim 2^k), we need V^k (dim 4^k = 2^2k).
+            
+            # Let's verify size limits.
+            # g=0: 1->2 (dim 4)
+            # g=1: 2->4 (dim 16)
+            # g=2: 4->8 (dim 256)
+            # g=3: 8->16 (dim 65536)
+            
+            # Constructing V_total for g=3 (V^8) is a (65536, 256) matrix.
+            # This is manageable in memory.
+            
+            V_total = V
+            for _ in range(current_n - 1):
+                V_total = np.kron(V_total, V)
+                
+            self.state = V_total @ self.state
+            current_n *= 2
+            
+        return self.state.flatten()
+
+# --- ANALYSIS ---
+
+def measure_power_spectrum(state, n_qubits):
+    print("\n[OBSERVATORY] Measuring Critical Correlations...")
+    
+    correlations = []
+    distances = range(1, n_qubits//2 + 1) # Measure up to half universe size
+    
+    probs = np.abs(state)**2
+    indices = np.arange(len(probs))
+    
+    for r in distances:
+        # Vectorized Correlation <Z_0 Z_r>
+        # MSB is index 0
+        bit_0 = (indices >> (n_qubits - 1)) & 1
+        bit_r = (indices >> (n_qubits - 1 - r)) & 1
+        
+        vals = (1 - 2*bit_0) * (1 - 2*bit_r)
+        corr = np.sum(probs * vals)
+        correlations.append(corr)
+        
+    return list(distances), correlations
+
+# --- EXECUTION ---
+
+def run_tuning_experiment():
+    print("HYPERMORPHIC GENESIS (v13.0) - CRITICAL TUNING")
+    print("==============================================")
+    
+    # Increase size to N=14 (16,384) to get better spectrum resolution
+    # Note: EPOCH=4 means 1->2->4->8->16 qubits.
+    EPOCHS = 4 
+    
+    sim = CriticalGenesis(EPOCHS)
+    final_state = sim.run()
+    
+    print(f"Universe Generated: {sim.n_qubits} Qubits")
+    
+    # Measure
+    dists, corrs = measure_power_spectrum(final_state, sim.n_qubits)
+    
+    # Print Table
+    print(f"\n{'Distance (r)':<15} | {'Correlation':<15}")
+    print("-" * 35)
+    for r, c in zip(dists, corrs):
+        print(f"{r:<15} | {c:.4f}")
+        
+    # Plotting
+    plt.style.use('dark_background')
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+    
+    # Linear Plot
+    ax1.plot(dists, corrs, 'o-', color='#00ffcc', linewidth=2)
+    ax1.set_title("Cosmic Power Spectrum (Linear)")
+    ax1.set_xlabel("Distance r")
+    ax1.set_ylabel("<Z0 Zr>")
+    ax1.grid(alpha=0.3)
+    
+    # Log-Log Plot (To check for Power Law / Scale Invariance)
+    # Filter negatives/zeros/noise for log plot to avoid errors
+    valid_d = []
+    valid_c = []
+    for d, c in zip(dists, corrs):
+        if c > 1e-5:
+            valid_d.append(d)
+            valid_c.append(c)
+    
+    if len(valid_c) > 2:
+        ax2.loglog(valid_d, valid_c, 'o--', color='#ff00ff', linewidth=2)
+        
+        # Fit Line
+        slope, intercept = np.polyfit(np.log(valid_d), np.log(valid_c), 1)
+        ax2.set_title(f"Scale Invariance Check (Log-Log)\nSlope = {slope:.2f}")
+    else:
+        ax2.set_title("Insufficient Data for Power Law Fit")
+        
+    ax2.set_xlabel("log(r)")
+    ax2.set_ylabel("log(Correlation)")
+    ax2.grid(alpha=0.3, which="both")
+    
+    plt.tight_layout()
+    plt.savefig('critical_universe.png')
+    
+    print("\n[VERDICT]")
+    # Check if we filled the gaps
+    # We check if *any* correlation is effectively zero (gap)
+    zeros = sum(1 for c in corrs if abs(c) < 0.001)
+    
+    if zeros == 0:
+        print("  Spectrum: CONTINUOUS (Gaps Filled).")
+        print("  Topology: The 'Liquid' Isometry successfully connected branches.")
+        
+        # Check Slope
+        # A slope around -1 to -2 implies critical behavior (1/r or 1/r^2)
+        if len(valid_c) > 2:
+            if -2.5 < slope < -0.5:
+                print(f"  Geometry: SCALE INVARIANT (Slope {slope:.2f}).")
+                print("  >> SUCCESS: Matches Critical Universe (CFT).")
+            else:
+                print(f"  Geometry: DECAYING (Slope {slope:.2f}).")
+    else:
+        print(f"  Spectrum: DISCRETE ({zeros} gaps detected).")
+        print("  Status: Still tree-like. Needs more mixing.")
+
+if __name__ == "__main__":
+    run_tuning_experiment()
+
+
+HYPERMORPHIC GENESIS (v13.0) - CRITICAL TUNING
+==============================================
+Universe Generated: 16 Qubits
+
+[OBSERVATORY] Measuring Critical Correlations...
+
+Distance (r)    | Correlation    
+-----------------------------------
+1               | 0.0920
+2               | -0.3743
+3               | -0.0519
+4               | 0.0686
+5               | -0.0255
+6               | 0.0618
+7               | -0.0210
+8               | 0.1010
+
+[VERDICT]
+  Spectrum: CONTINUOUS (Gaps Filled).
+  Topology: The 'Liquid' Isometry successfully connected branches.
+  Geometry: DECAYING (Slope -0.05).
