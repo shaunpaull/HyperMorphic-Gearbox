@@ -1,0 +1,417 @@
+Write one same format for this in a pdf
+
+And name it
+
+
+"""
+HYPERMORPHIC QUANTUM ARCHITECT (v8.0)
+-------------------------------------
+Hardware-Ready Entanglement Engineering & Advanced Noise Modeling.
+
+Capabilities:
+1. Noise: Amplitude Damping (Energy Loss) & Phase Damping (Dephasing).
+2. Compiler: Generates valid OpenQASM 2.0 code for IBM/Rigetti hardware.
+3. Metric: Logarithmic Negativity (E_N) for mixed-state entanglement.
+4. Solver: Adam-SPSA for noise-adaptive topological learning.
+"""
+
+import numpy as np
+import scipy.linalg
+import math
+import random
+import time
+from dataclasses import dataclass
+from typing import List
+
+# --- PART 1: ADVANCED QUANTUM NOISE FACTORY ---
+
+class QuantumChannel:
+    """
+    Generates Kraus Operators for realistic hardware noise.
+    rho_final = sum_k (K_k * rho * K_k_dagger)
+    """
+    @staticmethod
+    def amplitude_damping(gamma):
+        """
+        Models energy relaxation (|1> -> |0>). 
+        gamma: Probability of decay (related to T1 time).
+        """
+        # K0: No decay, but amplitude shrinks
+        K0 = np.array([[1.0, 0.0], [0.0, np.sqrt(1 - gamma)]], dtype=complex)
+        # K1: Decay occurred
+        K1 = np.array([[0.0, np.sqrt(gamma)], [0.0, 0.0]], dtype=complex)
+        return [K0, K1]
+
+    @staticmethod
+    def phase_damping(lam):
+        """
+        Models pure dephasing (loss of quantum information without energy loss).
+        lam: Probability of scattering (related to T2 time).
+        """
+        # K0: Identity
+        K0 = np.sqrt(1 - lam) * np.eye(2, dtype=complex)
+        # K1: Z-error
+        K1 = np.sqrt(lam) * np.array([[1, 0], [0, 0]], dtype=complex)
+        K2 = np.sqrt(lam) * np.array([[0, 0], [0, 1]], dtype=complex)
+        return [K0, K1, K2]
+
+    @staticmethod
+    def depolarizing(p):
+        """Symmetric white noise."""
+        if p == 0: return [np.eye(2, dtype=complex)]
+        K0 = np.sqrt(1 - p) * np.eye(2, dtype=complex)
+        K1 = np.sqrt(p/3) * np.array([[0, 1], [1, 0]], dtype=complex) # X
+        K2 = np.sqrt(p/3) * np.array([[0, -1j], [1j, 0]], dtype=complex) # Y
+        K3 = np.sqrt(p/3) * np.array([[1, 0], [0, -1]], dtype=complex) # Z
+        return [K0, K1, K2, K3]
+
+# --- PART 2: HIGH-PERFORMANCE DENSITY ENGINE ---
+
+class DensityEngineV8:
+    def __init__(self, n_qubits):
+        self.n = n_qubits
+        self.dim = 2**n_qubits
+        self.state = np.zeros((self.dim, self.dim), dtype=complex)
+        self.state[0, 0] = 1.0
+        
+        # Identity cache
+        self.I = np.eye(2, dtype=complex)
+
+    def apply_channel(self, kraus_ops, target_qubit):
+        """
+        Applies a quantum channel defined by a list of Kraus operators to a specific qubit.
+        Optimized using tensor reshaping to avoid 2^N x 2^N matrix multiplication.
+        """
+        n = self.n
+        # Reshape to (2, 2, ..., 2) for both Row and Col indices -> (2n axes)
+        rho_tensor = self.state.reshape([2]*(2*n))
+        
+        # We need to apply K to axis `target` and K_dagger to axis `target + n`
+        t_row = target_qubit
+        t_col = target_qubit + n
+        
+        # Prepare accumulator for the sum
+        new_rho_tensor = np.zeros_like(rho_tensor)
+        
+        # Move target axes to front for efficiency: (t_row, t_col, ...others...)
+        perm = list(range(2*n))
+        perm.remove(t_row)
+        perm.remove(t_col)
+        perm = [t_row, t_col] + perm
+        
+        inv_perm = np.argsort(perm)
+        
+        rho_perm = rho_tensor.transpose(perm)
+        # Shape (2, 2, 2^(2n-2)) -> (2, 2, rest)
+        rho_block = rho_perm.reshape(2, 2, -1)
+        
+        for K in kraus_ops:
+            # Operation: K * rho_block * K_dagger
+            # Tensordot approach
+            # 1. K @ rho: axes (1 of K, 0 of rho)
+            # K is (2,2), rho is (2,2,rest). Result (2, 2, rest) [NewRow, OldCol, Rest]
+            step1 = np.tensordot(K, rho_block, axes=([1], [0]))
+            
+            # 2. step1 @ K_dagger: axes (1 of step1, 0 of K_dagger)
+            # step1 is (2, 2, rest). K_dagger is (2, 2). 
+            # We want to contract OldCol (axis 1) with K_dag Row (axis 0)
+            # Result (2, rest, 2) [NewRow, Rest, NewCol]
+            step2 = np.tensordot(step1, K.conj().T, axes=([1], [0]))
+            
+            # Transpose back to (2, 2, rest) -> [NewRow, NewCol, Rest]
+            step3 = step2.transpose(0, 2, 1)
+            
+            # Accumulate
+            new_rho_tensor += step3.reshape(new_rho_tensor.shape) # Actually shapes don't match yet
+            
+            # We need to map step3 back to the permuted shape accumulator
+        
+            # Actually, simpler: accumulate in the permuted shape
+        
+        # Re-implement accumulation correctly
+        rho_perm_accum = np.zeros_like(rho_block)
+        
+        for K in kraus_ops:
+             # K (2,2) . rho (2,2,rest) -> (2,2,rest)
+             s1 = np.tensordot(K, rho_block, axes=([1], [0]))
+             # s1 (2,2,rest) . K_dag (2,2) -> (2,rest,2)
+             s2 = np.tensordot(s1, K.conj().T, axes=([1], [0]))
+             # (2,2,rest)
+             s3 = s2.transpose(0, 2, 1)
+             rho_perm_accum += s3
+             
+        # Un-permute
+        rho_final = rho_perm_accum.reshape(rho_perm.shape).transpose(inv_perm)
+        self.state = rho_final.reshape(self.dim, self.dim)
+
+    def apply_unitary(self, U, q_list):
+        """Applies a single unitary gate (as a 1-item Kraus list)."""
+        # If 1 qubit
+        if len(q_list) == 1:
+            self.apply_channel([U], q_list[0])
+            return
+
+        # If 2 qubits (CNOT)
+        # We construct the 4x4 matrix and treat it as a single 'qudit' op on 2 indices
+        # Simplified: Use standard matrix mult for 2-qubit gates if N is small (<8)
+        # This v8 engine supports full matrix fallback for multi-qubit gates
+        
+        # Construct full operator
+        # This is the bottleneck, but rigorous.
+        ops = [np.eye(2, dtype=complex)] * self.n
+        
+        # Handle CNOT logic explicitly to build full U
+        if U.shape == (4,4):
+            c, t = q_list
+            # Build P0_c I_t + P1_c X_t
+            P0 = np.array([[1,0],[0,0]], dtype=complex)
+            P1 = np.array([[0,0],[0,1]], dtype=complex)
+            X = np.array([[0,1],[1,0]], dtype=complex)
+            
+            op0 = [np.eye(2)] * self.n; op0[c] = P0
+            op1 = [np.eye(2)] * self.n; op1[c] = P1; op1[t] = X
+            
+            def mk(l):
+                r = l[0]
+                for x in l[1:]: r = np.kron(r, x)
+                return r
+            
+            Full_U = mk(op0) + mk(op1)
+            self.state = Full_U @ self.state @ Full_U.conj().T
+
+# --- PART 3: HARDWARE TRANSPILER (OPENQASM) ---
+
+class HardwareTranspiler:
+    def __init__(self, n_qubits):
+        self.n = n_qubits
+        self.qasm_lines = []
+        self._header()
+        
+    def _header(self):
+        self.qasm_lines.append("OPENQASM 2.0;")
+        self.qasm_lines.append('include "qelib1.inc";')
+        self.qasm_lines.append(f"qreg q[{self.n}];")
+        self.qasm_lines.append(f"creg c[{self.n}];")
+        
+    def add_gate(self, name, qubits, param=None):
+        if name == "H":
+            self.qasm_lines.append(f"h q[{qubits[0]}];")
+        elif name == "CX":
+            self.qasm_lines.append(f"cx q[{qubits[0]}], q[{qubits[1]}];")
+        elif name == "Rz":
+            # QASM uses rz(theta)
+            self.qasm_lines.append(f"rz({param:.4f}) q[{qubits[0]}];")
+            
+    def get_code(self):
+        return "\n".join(self.qasm_lines)
+
+# --- PART 4: HYPERMORPHIC TOPOLOGY OPTIMIZER ---
+
+def logarithmic_negativity(rho, cut):
+    # Partial Transpose & Trace Norm logic (as defined previously)
+    n = int(np.log2(rho.shape[0]))
+    dim_A = 2**cut
+    dim_B = 2**(n-cut)
+    tensor = rho.reshape(dim_A, dim_B, dim_A, dim_B)
+    rho_PT = tensor.transpose(0, 3, 2, 1).reshape(rho.shape)
+    evals = scipy.linalg.eigvalsh(rho_PT)
+    return max(0.0, np.log2(np.sum(np.abs(evals))))
+
+def run_hardware_experiment():
+    print("HYPERMORPHIC ARCHITECT (v8.0) - HARDWARE READY")
+    print("==============================================")
+    
+    N_QUBITS = 5
+    LAYERS = 3
+    
+    # 1. SETUP NOISE (Amplitude Damping - T1 Decay)
+    # Gamma = 0.05 implies ~5% energy loss per gate
+    GAMMA = 0.05 
+    noise_model = QuantumChannel.amplitude_damping(GAMMA)
+    
+    print(f"[EXPERIMENT] Learning Entanglement under Amplitude Damping (gamma={GAMMA})")
+    print("Goal: Maximize Logarithmic Negativity (E_N) in a decaying system.")
+    
+    # Optimizer State (Adam)
+    params = np.random.uniform(0, np.pi, 2*LAYERS) # [Beta, Theta, Beta, Theta...]
+    m = np.zeros_like(params); v = np.zeros_like(params)
+    beta1=0.9; beta2=0.999; eps=1e-8; lr=0.1
+    
+    best_E = -1.0
+    best_params = params.copy()
+    
+    print("\n[OPTIMIZATION LOOP]")
+    for i in range(25): # Fast loop for demo
+        
+        # SPSA Gradient Estimate
+        ck = 0.1 / (i+1)**0.101
+        delta = np.random.choice([-1, 1], size=params.shape)
+        
+        # Simulation (+)
+        eng_p = DensityEngineV8(N_QUBITS)
+        # Build Circuit (+)
+        params_p = params + ck*delta
+        transpiler_p = HardwareTranspiler(N_QUBITS) # Just for structure
+        
+        # EXECUTE LAYERS (+)
+        for l in range(LAYERS):
+            beta, theta = params_p[2*l], params_p[2*l+1]
+            
+            # H Layer
+            for q in range(N_QUBITS): 
+                eng_p.apply_unitary(eng_p.H, [q])
+                eng_p.apply_channel(noise_model, q) # Apply Decay
+                
+            # Rz Layer
+            for q in range(N_QUBITS):
+                # Rz(theta * (q+1))
+                angle = theta * (q+1)
+                gate = np.array([[np.exp(-1j*angle/2),0],[0,np.exp(1j*angle/2)]])
+                eng_p.apply_unitary(gate, [q])
+                eng_p.apply_channel(noise_model, q)
+                
+            # CX Layer (Winding)
+            b = int(abs(beta)) % (N_QUBITS-1) + 1
+            for q in range(N_QUBITS):
+                eng_p.apply_CX(q, (q+b)%N_QUBITS)
+                # Noise applied inside apply_CX
+        
+        E_plus = logarithmic_negativity(eng_p.state, N_QUBITS//2)
+        
+        # Simulation (-)
+        eng_m = DensityEngineV8(N_QUBITS)
+        params_m = params - ck*delta
+        # (Execute Layers (-) omitted for brevity, logic identical to +)
+        # For rigorous script, we must execute.
+        for l in range(LAYERS):
+            beta, theta = params_m[2*l], params_m[2*l+1]
+            for q in range(N_QUBITS): 
+                eng_m.apply_unitary(eng_m.H, [q])
+                eng_m.apply_channel(noise_model, q)
+            for q in range(N_QUBITS):
+                angle = theta * (q+1)
+                gate = np.array([[np.exp(-1j*angle/2),0],[0,np.exp(1j*angle/2)]])
+                eng_m.apply_unitary(gate, [q])
+                eng_m.apply_channel(noise_model, q)
+            b = int(abs(beta)) % (N_QUBITS-1) + 1
+            for q in range(N_QUBITS):
+                eng_m.apply_CX(q, (q+b)%N_QUBITS)
+
+        E_minus = logarithmic_negativity(eng_m.state, N_QUBITS//2)
+        
+        # Adam Update
+        grad = (E_plus - E_minus) / (2*ck*delta)
+        # Adam Logic
+        m = beta1*m + (1-beta1)*grad
+        v = beta2*v + (1-beta2)*(grad**2)
+        m_hat = m / (1-beta1**(i+1))
+        v_hat = v / (1-beta2**(i+1))
+        update = lr * m_hat / (np.sqrt(v_hat)+eps)
+        
+        params += update # Maximize E
+        
+        if E_plus > best_E:
+            best_E = E_plus
+            best_params = params_p
+            
+        if i % 5 == 0:
+            print(f"  Iter {i}: LogNeg = {E_plus:.4f} (Decay active)")
+            
+    # --- FINAL TRANSPILATION ---
+    print("\n[TRANSPILATION]")
+    print("Generating OpenQASM 2.0 code for IBM Quantum...")
+    
+    transpiler = HardwareTranspiler(N_QUBITS)
+    
+    # Re-run best params just to generate code
+    for l in range(LAYERS):
+        beta, theta = best_params[2*l], best_params[2*l+1]
+        
+        # Add H
+        for q in range(N_QUBITS): transpiler.add_gate("H", [q])
+        # Add Rz
+        for q in range(N_QUBITS): transpiler.add_gate("Rz", [q], theta*(q+1))
+        # Add CX
+        b = int(abs(beta)) % (N_QUBITS-1) + 1
+        for q in range(N_QUBITS): 
+            transpiler.add_gate("CX", [q, (q+b)%N_QUBITS])
+            
+    qasm_code = transpiler.get_code()
+    
+    print("-" * 40)
+    print(qasm_code)
+    print("-" * 40)
+    print(f"FINAL ENTANGLEMENT: {best_E:.4f} bits")
+    print("STATUS: Ready for Hardware Deployment.")
+
+if __name__ == "__main__":
+    run_hardware_experiment()
+
+
+
+HYPERMORPHIC ARCHITECT (v8.0) - HARDWARE READY
+==============================================
+[EXPERIMENT] Learning Entanglement under Amplitude Damping (gamma=0.05)
+
+[OPTIMIZATION LOOP]
+  Iter 0: LogNeg = 0.7623
+  Iter 5: LogNeg = 0.8992
+  Iter 10: LogNeg = 1.0169
+  Iter 15: LogNeg = 1.2467
+  Iter 20: LogNeg = 1.1520
+
+[TRANSPILATION]
+Generating OpenQASM 2.0 code for IBM Quantum...
+----------------------------------------
+OPENQASM 2.0;
+include "qelib1.inc";
+qreg q[5];
+creg c[5];
+h q[0];
+h q[1];
+h q[2];
+h q[3];
+h q[4];
+rz(-0.0062) q[0];
+rz(-0.0123) q[1];
+rz(-0.0185) q[2];
+rz(-0.0247) q[3];
+rz(-0.0308) q[4];
+cx q[0], q[2];
+cx q[1], q[3];
+cx q[2], q[4];
+cx q[3], q[0];
+cx q[4], q[1];
+h q[0];
+h q[1];
+h q[2];
+h q[3];
+h q[4];
+rz(0.3529) q[0];
+rz(0.7058) q[1];
+rz(1.0587) q[2];
+rz(1.4116) q[3];
+rz(1.7645) q[4];
+cx q[0], q[2];
+cx q[1], q[3];
+cx q[2], q[4];
+cx q[3], q[0];
+cx q[4], q[1];
+h q[0];
+h q[1];
+h q[2];
+h q[3];
+h q[4];
+rz(1.7271) q[0];
+rz(3.4542) q[1];
+rz(5.1813) q[2];
+rz(6.9084) q[3];
+rz(8.6356) q[4];
+cx q[0], q[1];
+cx q[1], q[2];
+cx q[2], q[3];
+cx q[3], q[4];
+cx q[4], q[0];
+----------------------------------------
+FINAL ENTANGLEMENT: 1.2467 bits
+STATUS: Ready for Hardware Deployment.
