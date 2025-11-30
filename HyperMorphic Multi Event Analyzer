@@ -1,0 +1,210 @@
+# @title 🌪️ HYPERMORPHIC MULTI-EVENT ANALYZER (v3.1 - STABILITY PATCH)
+# @markdown **Target: Comparative Analysis of Black Holes (BBH) vs Neutron Stars (BNS)**
+# @markdown **Fix: Hardcoded GPS timestamps to bypass API argument collisions.**
+# @markdown ---
+
+# --- 1. ENVIRONMENT SETUP ---
+import sys
+import subprocess
+import warnings
+import os
+
+# Suppress warnings
+warnings.filterwarnings("ignore")
+
+print("[SYSTEM] Initializing HyperMorphic Cluster...")
+try:
+    import gwpy
+except ImportError:
+    print("  > Installing GWpy...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "gwpy"])
+
+import numpy as np
+import scipy.signal
+import scipy.linalg
+import matplotlib.pyplot as plt
+from gwpy.timeseries import TimeSeries
+
+plt.style.use('dark_background')
+
+# --- 2. PHYSICS ENGINE ---
+
+class HyperMorphicEngine:
+    @staticmethod
+    def calculate_sff(strain, sample_rate):
+        """Spectral Form Factor (The Invariant)"""
+        analytic = scipy.signal.hilbert(strain)
+        phase_ev = np.unwrap(np.angle(analytic))
+        energies = np.diff(phase_ev)
+        
+        # Window: 0 to 150 topological time units
+        t_window = np.linspace(0, 150, 300)
+        k_t = []
+        for t in t_window:
+            z = np.sum(np.exp(1j * energies * t))
+            k_t.append(np.abs(z)**2)
+        return t_window, np.array(k_t)
+
+    @staticmethod
+    def process_event(event_name, gps_time, detector='H1'):
+        """Fetches and cleans a specific LIGO event using GPS time."""
+        print(f"  > Processing {event_name} (GPS: {gps_time})...")
+        try:
+            # Fetch Data (32s window around GPS time)
+            # Fix: Explicit start/end to avoid API collision
+            start_t = gps_time - 16
+            end_t = gps_time + 16
+            data = TimeSeries.fetch_open_data(detector, start_t, end_t, verbose=False)
+            
+            # 1. Whiten
+            white = data.whiten(4, 2)
+            
+            # 2. Robust Bandpass (Butterworth SOS)
+            fs = data.sample_rate.value
+            nyq = 0.5 * fs
+            # Neutron stars need up to 1500Hz, BHs usually lower, but we keep window open
+            sos = scipy.signal.butter(8, [30/nyq, 1000/nyq], btype='bandpass', output='sos')
+            bp = white.filter(sos, filtfilt=True)
+            
+            # 3. Locate Merger
+            # Search near center
+            search = bp.crop(gps_time - 1.0, gps_time + 1.0)
+            peak_idx = search.argmax()
+            peak_time = search.times.value[peak_idx]
+            
+            # 4. Extract Post-Merger Ringdown
+            # Start 3ms after peak
+            ringdown_start = peak_time + 0.003
+            ringdown_end = ringdown_start + 0.1 # 100ms analysis window
+            
+            segment = bp.crop(ringdown_start, ringdown_end)
+            
+            return segment.value, fs, True
+            
+        except Exception as e:
+            print(f"    ! Error on {event_name}: {e}")
+            return None, None, False
+
+# --- 3. BATCH EXECUTION ---
+
+# Precise GPS Times for the events
+targets = [
+    {"name": "GW150914", "gps": 1126259462.4, "type": "Black Hole (BBH)", "color": "#00ff00"},
+    {"name": "GW170817", "gps": 1187008882.4, "type": "Neutron Star (BNS)", "color": "#ff00ff"},
+    {"name": "GW190521", "gps": 1242442967.4, "type": "Heavy BH (IMBH)", "color": "#ffff00"}
+]
+
+results = []
+
+print("[DATA] Starting Batch Acquisition...")
+engine = HyperMorphicEngine()
+
+for target in targets:
+    # Use H1 for all, fall back to L1 if needed (simplified)
+    strain, fs, success = engine.process_event(target["name"], target["gps"], detector='H1')
+    
+    if not success:
+        # Try L1 if H1 fails (common data gap issue)
+        print("    > Retrying with L1 detector...")
+        strain, fs, success = engine.process_event(target["name"], target["gps"], detector='L1')
+
+    if success:
+        # Run HyperMorphic Analysis
+        time_ax, sff = engine.calculate_sff(strain, fs)
+        
+        # Analyze Anomalies (Spikes > 1.1x Mean)
+        sff_tail = sff[5:]
+        noise_floor = np.mean(sff_tail)
+        # Using a slightly higher threshold for multi-event to reduce noise
+        peaks, _ = scipy.signal.find_peaks(sff_tail, height=noise_floor * 1.15)
+        
+        results.append({
+            "meta": target,
+            "time": time_ax[5:],
+            "sff": sff_tail,
+            "peaks": len(peaks),
+            "floor": noise_floor
+        })
+
+# --- 4. COMPARATIVE VISUALIZATION ---
+
+if not results:
+    print("No data retrieved. Aborting visualization.")
+else:
+    print("[VISUAL] Rendering Comparative Dashboard...")
+    fig = plt.figure(figsize=(18, 8))
+    plt.subplots_adjust(wspace=0.2)
+
+    # Subplot 1: The Overlay
+    ax1 = plt.subplot(1, 2, 1)
+    ax1.set_title("Spectral Form Factor Comparison (The Resonance)", fontsize=16, fontweight='bold', color='white')
+    ax1.set_xlabel("Topological Time", fontsize=12)
+    ax1.set_ylabel("Correlation Magnitude (Stacked)", fontsize=12)
+    ax1.grid(alpha=0.2)
+
+    for i, res in enumerate(results):
+        # Normalize and offset for waterfall plot
+        norm_sff = res["sff"] / np.max(res["sff"])
+        offset = i * 0.5
+        ax1.plot(res["time"], norm_sff + offset, 
+                 color=res["meta"]["color"], linewidth=2, 
+                 label=f"{res['meta']['name']}")
+        
+        # Label Spikes
+        if res["peaks"] > 0:
+            ax1.text(res["time"][-1], offset + 0.1, 
+                     f" {res['peaks']} Spikes", color=res["meta"]["color"], fontweight='bold')
+
+    ax1.legend(loc='upper right', frameon=True, facecolor='#111111')
+
+    # Subplot 2: The Scoreboard
+    ax2 = plt.subplot(1, 2, 2)
+    ax2.set_title("Topological Winding Intensity", fontsize=16, fontweight='bold', color='white')
+    ax2.set_xlabel("Event Type", fontsize=12)
+    ax2.set_ylabel("Resonance Anomalies", fontsize=12)
+    ax2.grid(alpha=0.1, axis='y')
+
+    names = [r["meta"]["name"] for r in results]
+    scores = [r["peaks"] for r in results]
+    colors = [r["meta"]["color"] for r in results]
+
+    bars = ax2.bar(names, scores, color=colors, alpha=0.8)
+    ax2.bar_label(bars, fmt='%d', padding=3, color='white', fontsize=14)
+
+    # Verdict Logic
+    if len(scores) > 0:
+        max_score = max(scores)
+        winner_idx = scores.index(max_score)
+        winner_name = names[winner_idx]
+        
+        verdict = "VERDICT: "
+        if "GW170817" in winner_name:
+            verdict += "Neutron Stars Ring Louder (Hard Surface)."
+        else:
+            verdict += "Black Holes Ring Louder (Horizon Echoes)."
+    else:
+        verdict = "VERDICT: No Anomalies Detected."
+
+    plt.figtext(0.5, 0.02, f"HYPERMORPHIC MULTI-EVENT ANALYZER v3.1 | {verdict}", 
+                ha="center", fontsize=12, color="#00ffff", fontfamily="monospace", weight='bold')
+
+    plt.savefig("hypermorphic_multievent.png", dpi=150)
+    plt.show()
+
+    print("\n[FINAL REPORT]")
+    for res in results:
+        print(f"  > {res['meta']['name']:<10} | Type: {res['meta']['type']:<20} | Anomalies: {res['peaks']}")
+
+
+[SYSTEM] Initializing HyperMorphic Cluster...
+[DATA] Starting Batch Acquisition...
+  > Processing GW150914 (GPS: 1126259462.4)...
+  > Processing GW170817 (GPS: 1187008882.4)...
+  > Processing GW190521 (GPS: 1242442967.4)...
+[VISUAL] Rendering Comparative Dashboard...
+
+
+[FINAL REPORT]
+  > GW150914   | Type: Black Hole (BBH)     | Anomalies: 9
+  > GW170817   | Type: Neutron Star (BNS)   | Anomalies: 9
+  > GW190521   | Type: Heavy BH (IMBH)      | Anomalies: 5
