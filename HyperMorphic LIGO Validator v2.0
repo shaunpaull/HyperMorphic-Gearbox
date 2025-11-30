@@ -1,0 +1,220 @@
+# @title 🌪️ HYPERMORPHIC VALIDATOR (v5.1 - PATCHED)
+# @markdown **Target: GW150914 (The Black Hole)**
+# @markdown **Objective: Rigorous Statistical Falsification**
+# @markdown ---
+# @markdown *Fix: Removed deprecated sample_rate argument in Test 3. Threshold 1.25x.*
+
+# --- 1. ENVIRONMENT SETUP ---
+import sys
+import subprocess
+import warnings
+import os
+
+warnings.filterwarnings("ignore")
+
+print("[SYSTEM] Initializing Validation Cluster...")
+try:
+    import gwpy
+except ImportError:
+    print("  > Installing GWpy...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "gwpy"])
+
+import numpy as np
+import scipy.signal
+import scipy.linalg
+import scipy.stats
+import matplotlib.pyplot as plt
+from gwpy.timeseries import TimeSeries
+
+plt.style.use('dark_background')
+
+# --- 2. PHYSICS ENGINE ---
+
+class HyperMorphicEngine:
+    @staticmethod
+    def calculate_sff(strain):
+        """Spectral Form Factor calculation."""
+        analytic = scipy.signal.hilbert(strain)
+        phase_ev = np.unwrap(np.angle(analytic))
+        energies = np.diff(phase_ev)
+        
+        # Topological Time Window
+        t_window = np.linspace(0, 150, 300)
+        k_t = []
+        for t in t_window:
+            z = np.sum(np.exp(1j * energies * t))
+            k_t.append(np.abs(z)**2)
+        return t_window, np.array(k_t)
+
+    @staticmethod
+    def count_anomalies(sff, sensitivity=1.25):
+        """
+        STRICT COUNTING.
+        Only peaks 25% above the mean noise floor are counted.
+        """
+        # Ignore t=0 correlation peak
+        tail = sff[5:]
+        floor = np.mean(tail)
+        threshold = floor * sensitivity
+        peaks, _ = scipy.signal.find_peaks(tail, height=threshold)
+        return len(peaks), tail, threshold
+
+# --- 3. VALIDATION MODULES ---
+
+class Validator:
+    @staticmethod
+    def generate_surrogate(timeseries):
+        """Phase Scrambling (The Ghost Generator)."""
+        data = timeseries.value
+        f_data = np.fft.rfft(data)
+        random_phases = np.exp(1j * np.random.uniform(0, 2*np.pi, len(f_data)))
+        f_surrogate = np.abs(f_data) * random_phases
+        surrogate = np.fft.irfft(f_surrogate, n=len(data))
+        return TimeSeries(surrogate, sample_rate=timeseries.sample_rate)
+
+    @staticmethod
+    def create_classical_injection(sample_rate=4096, duration=0.1):
+        """Smooth GR Ringdown Injection."""
+        t = np.linspace(0, duration, int(sample_rate*duration))
+        # Standard Ringdown
+        ringdown = np.exp(-t/0.004) * np.cos(2*np.pi*250*t)
+        # Add Noise (SNR ~ 10)
+        noise = np.random.normal(0, 0.1, len(t))
+        return ringdown + noise
+
+# --- 4. EXECUTION ---
+
+GPS_TARGET = 1126259462.4 # GW150914
+print(f"\n[TARGET ACQUIRED] GW150914 (GPS: {GPS_TARGET})")
+
+engine = HyperMorphicEngine()
+validator = Validator()
+
+# A. FETCH DATA
+print("[DATA] Fetching Detectors H1 & L1...")
+try:
+    # H1
+    d_h1 = TimeSeries.fetch_open_data('H1', GPS_TARGET-16, GPS_TARGET+16, verbose=False)
+    w_h1 = d_h1.whiten(4, 2).bandpass(30, 1000)
+    # Align H1 peak
+    peak_h1 = w_h1.crop(GPS_TARGET-0.1, GPS_TARGET+0.1).argmax()
+    time_h1 = w_h1.crop(GPS_TARGET-0.1, GPS_TARGET+0.1).times.value[peak_h1]
+    zoom_h1 = w_h1.crop(time_h1 + 0.003, time_h1 + 0.1)
+
+    # L1
+    d_l1 = TimeSeries.fetch_open_data('L1', GPS_TARGET-16, GPS_TARGET+16, verbose=False)
+    w_l1 = d_l1.whiten(4, 2).bandpass(30, 1000)
+    # Align L1 peak (Detectors see event at slightly different times)
+    peak_l1 = w_l1.crop(GPS_TARGET-0.1, GPS_TARGET+0.1).argmax()
+    time_l1 = w_l1.crop(GPS_TARGET-0.1, GPS_TARGET+0.1).times.value[peak_l1]
+    zoom_l1 = w_l1.crop(time_l1 + 0.003, time_l1 + 0.1)
+    
+    print("  > Detectors Locked & Aligned.")
+except Exception as e:
+    print(f"  ! Data Error: {e}")
+    sys.exit()
+
+# B. REAL ANALYSIS (Strict Threshold)
+print("[TEST 1] Running Strict SFF Analysis (Threshold 1.25x)...")
+t_ax, sff_h1 = engine.calculate_sff(zoom_h1.value)
+_, sff_l1 = engine.calculate_sff(zoom_l1.value)
+
+real_peaks, tail_h1, thresh_h1 = engine.count_anomalies(sff_h1, sensitivity=1.25)
+print(f"  > Real H1 Anomalies: {real_peaks}")
+
+# C. SURROGATE DISTRIBUTION
+print(f"\n[TEST 2] Generating 200 Surrogates (Monte Carlo)...")
+surr_counts = []
+surr_tails = []
+
+for i in range(200):
+    if i % 50 == 0: print(f"  > Iteration {i}/200...")
+    s_data = validator.generate_surrogate(zoom_h1)
+    _, s_sff = engine.calculate_sff(s_data.value)
+    peaks, tail, _ = engine.count_anomalies(s_sff, sensitivity=1.25)
+    surr_counts.append(peaks)
+    surr_tails.append(tail)
+
+# STATS
+mean_surr = np.mean(surr_counts)
+std_surr = np.std(surr_counts)
+z_score = (real_peaks - mean_surr) / (std_surr + 1e-9)
+
+# Empirical P-Value
+n_greater = sum(1 for c in surr_counts if c >= real_peaks)
+p_value = n_greater / 200.0
+
+print(f"  > Z-SCORE: {z_score:.2f} Sigma")
+print(f"  > P-VALUE: {p_value:.4f}")
+
+# D. CONTROL
+print(f"\n[TEST 3] Classical Control...")
+c_wave = validator.create_classical_injection()
+# FIX: Removed the '4096' argument here
+_, sff_c = engine.calculate_sff(c_wave)
+c_peaks, _, _ = engine.count_anomalies(sff_c, sensitivity=1.25)
+print(f"  > Injection Anomalies: {c_peaks}")
+
+# --- 5. SUPPLEMENTARY FIGURE 1 ---
+
+print("\n[VISUAL] Generating Supplementary Figure 1...")
+fig = plt.figure(figsize=(18, 12))
+plt.suptitle("Supplementary Figure 1: Robustness of HyperMorphic Anomalies in GW150914", 
+             fontsize=20, color='white', y=0.95)
+
+# Panel A: Real vs Surrogate Cloud
+ax1 = plt.subplot(2, 2, 1)
+ax1.set_title("A. Surrogate Null Hypothesis Test", fontsize=14, color='white', fontweight='bold')
+# Plot Cloud
+for st in surr_tails[:50]:
+    ax1.plot(t_ax[5:], st, color='gray', alpha=0.1)
+# Plot Real
+ax1.plot(t_ax[5:], tail_h1, color='#00ff00', linewidth=2, label='Real GW150914')
+ax1.axhline(y=thresh_h1, color='red', linestyle='--', label='Strict Threshold (1.25x)')
+ax1.set_ylabel("SFF Magnitude")
+ax1.legend(loc='upper right')
+ax1.grid(alpha=0.2)
+
+# Panel B: Statistical Significance
+ax2 = plt.subplot(2, 2, 2)
+ax2.set_title(f"B. Empirical P-Value Distribution (p = {p_value:.4f})", fontsize=14, color='white', fontweight='bold')
+ax2.hist(surr_counts, bins=range(0, 20), color='gray', alpha=0.7, label='Noise (Surrogates)')
+ax2.axvline(x=real_peaks, color='#00ffff', linewidth=3, linestyle='--', label=f'Real Event ({real_peaks})')
+ax2.set_xlabel("Anomaly Count")
+ax2.legend()
+ax2.grid(alpha=0.2)
+
+# Panel C: H1-L1 Alignment
+ax3 = plt.subplot(2, 2, 3)
+ax3.set_title("C. Cross-Detector Topological Coherence", fontsize=14, color='white', fontweight='bold')
+# Normalize
+n_h1 = sff_h1[5:] / np.max(sff_h1[5:])
+n_l1 = sff_l1[5:] / np.max(sff_l1[5:])
+ax3.plot(t_ax[5:], n_h1, color='#00ff00', label='Hanford (H1)', alpha=0.8)
+ax3.plot(t_ax[5:], n_l1, color='#ff00ff', label='Livingston (L1)', alpha=0.8)
+# Correlation
+corr = np.corrcoef(n_h1, n_l1)[0,1]
+ax3.text(0.05, 0.9, f"Correlation: {corr:.3f}", transform=ax3.transAxes, color='white', fontweight='bold')
+ax3.set_xlabel("Topological Time")
+ax3.legend()
+ax3.grid(alpha=0.2)
+
+# Panel D: Injection Control
+ax4 = plt.subplot(2, 2, 4)
+ax4.set_title("D. Classical Injection Control", fontsize=14, color='white', fontweight='bold')
+ax4.plot(t_ax[5:], sff_c[5:], color='yellow', label='Smooth GR Model')
+ax4.axhline(y=np.mean(sff_c[5:])*1.25, color='red', linestyle='--', label='Threshold')
+ax4.text(0.5, 0.5, f"Spikes: {c_peaks}", transform=ax4.transAxes, color='yellow', fontsize=20, ha='center')
+ax4.legend()
+ax4.grid(alpha=0.2)
+
+plt.tight_layout(rect=[0, 0.03, 1, 0.93])
+plt.savefig("Supplementary_Figure_1.png", dpi=150)
+plt.show()
+
+# VERDICT
+print("\n[STATISTICAL VERDICT]")
+if p_value < 0.05:
+    print(f"  >> SIGNIFICANT RESULT (p < 0.05). The anomalies are not random noise.")
+else:
+    print(f"  >> NULL RESULT (p = {p_value:.4f}). Cannot reject noise hypothesis.")
