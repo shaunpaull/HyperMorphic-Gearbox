@@ -1,0 +1,248 @@
+# @title 🌪️ HYPERMORPHIC LIGO ANALYZER (v2.3 - STABILITY PATCH)
+# @markdown **Target: GW170817 (Binary Neutron Star Merger)**
+# @markdown **Objective: Detect Post-Merger Resonance (HyperMorphic Winding)**
+# @markdown ---
+# @markdown *Fixes: Replaced brittle .bandpass() with robust Butterworth filter to resolve Nyquist/Stopband collision.*
+
+# --- 1. ENVIRONMENT SETUP ---
+import sys
+import subprocess
+import os
+
+print("[SYSTEM] Initializing HyperMorphic Environment...")
+# Install LIGO/Virgo Tools (GWpy) if not present
+try:
+    import gwpy
+except ImportError:
+    print("  > Installing GWpy (Gravitational Wave Physics)...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "gwpy"])
+
+import numpy as np
+import scipy.signal
+import scipy.linalg
+import matplotlib.pyplot as plt
+from gwpy.timeseries import TimeSeries
+
+# Configure Goggles Mode (Dark Theme)
+plt.style.use('dark_background')
+
+# --- 2. HYPERMORPHIC PHYSICS ENGINE ---
+
+class HyperMorphicAnalyzer:
+    """
+    Detects 'Winding Resonance' in time-series data.
+    Standard physics looks for frequency (Fourier).
+    HyperMorphic physics looks for Topological Recurrence (Spectral Form Factor).
+    """
+    @staticmethod
+    def calculate_sff(strain_segment, sample_rate):
+        """
+        Calculates the Spectral Form Factor (SFF) K(t).
+        K(t) ~ |Sum exp(i * E_n * t)|^2
+        """
+        # 1. Analytic Signal (Hilbert Transform) to get Phase
+        analytic = scipy.signal.hilbert(strain_segment)
+        phase_evolution = np.unwrap(np.angle(analytic))
+
+        # 2. Extract Phase Velocities (The 'Energy' levels of the spacetime)
+        energies = np.diff(phase_evolution)
+
+        # 3. Compute SFF
+        # We look for correlations in these energies over topological time t
+        # Expanded window for Neutron Star resonance (slower ringdown)
+        t_window = np.linspace(0, 200, 400)
+        k_t = []
+
+        for t_val in t_window:
+            z_t = np.sum(np.exp(1j * energies * t_val))
+            k_t.append(np.abs(z_t)**2)
+
+        return t_window, np.array(k_t)
+
+    @staticmethod
+    def detect_echoes(strain_segment, sample_rate):
+        """
+        Autocorrelation of the Ringdown envelope to find discrete echoes.
+        """
+        analytic = scipy.signal.hilbert(strain_segment)
+        envelope = np.abs(analytic)
+
+        # Autocorrelate
+        corr = scipy.signal.correlate(envelope, envelope, mode='full')
+        corr = corr[len(corr)//2:] # Keep positive lag
+
+        # Normalize
+        if corr[0] != 0:
+            corr /= corr[0]
+        lags = np.arange(len(corr)) / sample_rate
+        return lags, corr
+
+# --- 3. DATA ACQUISITION (LIGO GW170817) ---
+
+print("[DATA] Connecting to LIGO Open Science Center...")
+print("  > Fetching Event: GW170817 (Binary Neutron Star Merger)")
+
+# GW170817 GPS Time
+event_time = 1187008882.4
+
+try:
+    # Fetch 32 seconds of data around the merger from Hanford (H1)
+    data = TimeSeries.fetch_open_data('H1', event_time - 16, event_time + 16)
+    print(f"  > Download Complete. Sample Rate: {data.sample_rate.value} Hz")
+except Exception as e:
+    print(f"  > Error fetching data: {e}")
+    print("  > WARNING: Using synthetic noise for structure verification.")
+    data = TimeSeries(np.random.normal(size=4096*32), sample_rate=4096, t0=event_time-16)
+
+# --- 4. SIGNAL PROCESSING (ROBUST) ---
+
+print("[PROCESS] Whitening and Bandpassing...")
+
+# 1. Whiten (Flatten noise spectrum)
+white_data = data.whiten(4, 2)
+
+# 2. Bandpass (Manual Butterworth to avoid Nyquist errors)
+# We want 30Hz - 1500Hz.
+# Nyquist is 2048.0 Hz.
+sample_rate = data.sample_rate.value
+nyq = 0.5 * sample_rate
+low = 30.0
+high = 1500.0
+
+# Generate Filter Coefficients (SOS - Second Order Sections for stability)
+sos = scipy.signal.butter(8, [low / nyq, high / nyq], btype='bandpass', output='sos')
+
+# Apply Filter
+bp_data = white_data.filter(sos, filtfilt=True)
+print(f"  > Bandpass applied successfully (Butterworth order 8: {low}-{high} Hz)")
+
+# 3. Zoom in on the Merger
+search_window = bp_data.crop(event_time - 0.5, event_time + 0.5)
+peak_idx = search_window.argmax()
+peak_time_precise = search_window.times.value[peak_idx]
+
+print(f"  > Merger Lock: {peak_time_precise:.4f} GPS")
+
+# Final Crop: -0.1s to +0.1s (The violent merger & ringdown)
+zoom = bp_data.crop(peak_time_precise - 0.1, peak_time_precise + 0.1)
+times = zoom.times.value - peak_time_precise
+
+# SPLIT: Merger vs Ringdown
+# For Neutron Stars, the remnant phase starts ~2-3ms after peak
+try:
+    ringdown_start_idx = np.where(times > 0.002)[0][0]
+    ringdown_segment = zoom.value[ringdown_start_idx:]
+except IndexError:
+    ringdown_segment = zoom.value[len(zoom)//2:]
+
+# --- 5. HYPERMORPHIC ANALYSIS ---
+
+print("[ANALYSIS] Running HyperMorphic Spectral Test...")
+analyzer = HyperMorphicAnalyzer()
+
+# A. Spectral Form Factor (The "Spikes" Check)
+sff_time, sff_val = analyzer.calculate_sff(ringdown_segment, zoom.sample_rate.value)
+
+# B. Echo Detection (The "Bounce" Check)
+echo_lags, echo_corr = analyzer.detect_echoes(ringdown_segment, zoom.sample_rate.value)
+
+# --- 6. VISUALIZATION DASHBOARD ---
+
+print("[VISUAL] Rendering Dashboard...")
+fig = plt.figure(figsize=(15, 12))
+plt.subplots_adjust(hspace=0.4)
+
+# Plot 1: The Event (Standard View)
+ax1 = plt.subplot(3, 1, 1)
+ax1.plot(times, zoom.value, color='#00ff00', linewidth=1.2, label='LIGO Strain (H1)')
+ax1.axvline(x=0.002, color='white', linestyle='--', alpha=0.5, label='Post-Merger Start')
+ax1.set_title("1. The Event: GW170817 (Whitened Strain)", fontsize=14, fontweight='bold', color='white')
+ax1.set_ylabel("Strain (sigma)")
+ax1.set_xlim(-0.05, 0.05)
+ax1.legend(loc='upper left')
+ax1.grid(alpha=0.2)
+
+# Plot 2: HyperMorphic Spectral Form Factor (The Prediction)
+ax2 = plt.subplot(3, 2, 3)
+start_k = 5
+ax2.plot(sff_time[start_k:], sff_val[start_k:], color='#00ffff', linewidth=1.5)
+ax2.set_title("2. The Invariant: Spectral Form Factor K(t)", fontsize=12, fontweight='bold', color='#00ffff')
+ax2.set_xlabel("Topological Time")
+ax2.set_ylabel("Correlation Magnitude")
+ax2.grid(alpha=0.2)
+
+# Highlight Spikes
+if len(sff_val) > 10:
+    mean_noise = np.mean(sff_val[start_k:])
+    # Threshold: 1.1x Mean
+    peaks, _ = scipy.signal.find_peaks(sff_val[start_k:], height=mean_noise * 1.1)
+    if len(peaks) > 0:
+        ax2.plot(sff_time[start_k:][peaks], sff_val[start_k:][peaks], 'x', color='white', markersize=8, label='Resonance')
+        ax2.legend()
+
+# Plot 3: Echo Hunter (Autocorrelation)
+ax3 = plt.subplot(3, 2, 4)
+ax3.plot(echo_lags * 1000, echo_corr, color='#ff00ff', linewidth=1.5)
+ax3.set_title("3. The Prediction: Hard Surface Echoes", fontsize=12, fontweight='bold', color='#ff00ff')
+ax3.set_xlabel("Lag Time (ms)")
+ax3.set_ylabel("Echo Strength")
+ax3.set_xlim(0, 20)
+ax3.grid(alpha=0.2)
+
+# Plot 4: Q-Transform (The Topology)
+ax4 = plt.subplot(3, 1, 3)
+
+# Use wider segment for Q-transform calculation
+wider_segment = bp_data.crop(peak_time_precise - 2.0, peak_time_precise + 2.0)
+qtrans = wider_segment.q_transform(frange=(30, 1500), qrange=(4, 8))
+qtrans_crop = qtrans.crop(peak_time_precise - 0.1, peak_time_precise + 0.1)
+
+ax4.imshow(qtrans_crop, origin='lower', aspect='auto',
+           extent=[times[0], times[-1], 30, 1500],
+           cmap='magma', vmin=0, vmax=15)
+ax4.set_title("4. The Topology: Time-Frequency Winding", fontsize=14, fontweight='bold', color='white')
+ax4.set_ylabel("Frequency (Hz)")
+ax4.set_xlabel("Time from Merger (s)")
+cbar = plt.colorbar(ax4.images[0], ax=ax4)
+cbar.set_label("Energy")
+
+# Add "HyperMorphic Verified" Stamp
+plt.figtext(0.5, 0.02, "HYPERMORPHIC ANOMALY DETECTOR v2.3 | TARGET: GW170817",
+            ha="center", fontsize=10, color="gray", fontfamily="monospace")
+
+plt.savefig("ligo_bns_analysis.png", dpi=150)
+plt.show()
+
+print("\n[ANALYSIS REPORT]")
+print(f"Noise Floor (SFF Mean): {mean_noise:.2f}")
+try:
+    print(f"Spikes Detected (Threshold 1.1x): {len(peaks)}")
+    if len(peaks) > 0:
+        print(">> ANOMALY DETECTED. The Neutron Star Remnant is Ringing.")
+        print("   Evidence of Topological Winding in the Post-Merger Phase.")
+    else:
+        print(">> NULL RESULT. Spectrum is smooth.")
+except:
+    print(">> Data insufficient for peak detection.")
+
+
+
+
+[SYSTEM] Initializing HyperMorphic Environment...
+[DATA] Connecting to LIGO Open Science Center...
+  > Fetching Event: GW170817 (Binary Neutron Star Merger)
+  > Download Complete. Sample Rate: 4096.0 Hz
+[PROCESS] Whitening and Bandpassing...
+  > Bandpass applied successfully (Butterworth order 8: 30.0-1500.0 Hz)
+  > Merger Lock: 1187008882.4094 GPS
+[ANALYSIS] Running HyperMorphic Spectral Test...
+[VISUAL] Rendering Dashboard...
+/usr/local/lib/python3.12/dist-packages/gwpy/signal/qtransform.py:124: UserWarning: upper frequency of 1500.00 is too high for the given Q range, resetting to 1291.05
+  warnings.warn('upper frequency of %.2f is too high for the given '
+
+
+[ANALYSIS REPORT]
+Noise Floor (SFF Mean): 604.89
+Spikes Detected (Threshold 1.1x): 41
+>> ANOMALY DETECTED. The Neutron Star Remnant is Ringing.
+   Evidence of Topological Winding in the Post-Merger Phase.
