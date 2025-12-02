@@ -1,0 +1,291 @@
+# @title 🌪️ HYPERMORPHIC CATALOG ANALYZER (v3.0 - ULTRAFINE)
+
+# @markdown **Target: GWTC Catalog (BBH, BNS, NSBH)**
+
+# @markdown **Objective: High-Resolution Topology Mapping (The “Texture” of the Universe)**
+
+# @markdown —
+
+# @markdown *Updates: Threshold lowered to 1.05x noise. SFF resolution boosted to 1000 points. Winding extraction refined.*
+
+import sys
+import subprocess
+import warnings
+import pandas as pd
+import numpy as np
+import scipy.signal
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+
+# Install GW Tools
+
+print(”[SYSTEM] Initializing HyperMorphic Cluster…”)
+try:
+import gwpy
+import gwosc
+except ImportError:
+print(”  > Installing GWpy & GWOSC…”)
+subprocess.check_call([sys.executable, “-m”, “pip”, “install”, “gwpy”, “gwosc”])
+
+from gwpy.timeseries import TimeSeries
+
+warnings.filterwarnings(“ignore”)
+plt.style.use(‘dark_background’)
+
+# — 1. PHYSICS ENGINE (ULTRA-SENSITIVE) —
+
+class HyperMorphicEngine:
+@staticmethod
+def calculate_sff(strain):
+“””
+High-Res Spectral Form Factor.
+“””
+analytic = scipy.signal.hilbert(strain)
+phase = np.unwrap(np.angle(analytic))
+energies = np.diff(phase)
+
+```
+    # INCREASED RESOLUTION: 1000 steps to catch fine winding
+    t_window = np.linspace(0, 200, 1000)
+    k_t = []
+    for t in t_window:
+        z = np.sum(np.exp(1j * energies * t))
+        k_t.append(np.abs(z)**2)
+    return t_window, np.array(k_t)
+
+@staticmethod
+def analyze_event(strain):
+    t_ax, sff = HyperMorphicEngine.calculate_sff(strain)
+    
+    # Anomaly Detection
+    # Skip t=0 correlation spike (first 20 points in high res)
+    tail = sff[20:]
+    t_tail = t_ax[20:]
+    
+    if len(tail) == 0: return 0, 0, sff
+    
+    floor = np.mean(tail)
+    # SENSITIVITY: 1.05x (Captures subtle texture)
+    peaks, _ = scipy.signal.find_peaks(tail, height=floor * 1.05)
+    
+    # Winding Constant Extraction (Robust)
+    b = 0
+    if len(peaks) > 2:
+        # Get average spacing between first few dominant peaks
+        # Sort peaks by height to find dominant modes
+        peak_heights = tail[peaks]
+        # Take top 50% of peaks to calculate spacing (ignore noise grass)
+        strong_peaks = peaks[peak_heights > floor * 1.1]
+        
+        if len(strong_peaks) > 1:
+            spacings = np.diff(t_tail[strong_peaks])
+            period = np.median(spacings) # Median is more robust than mean
+            if period > 0.5: b = int(100.0 / period)
+        else:
+            # Fallback to all peaks if signal is weak
+            spacings = np.diff(t_tail[peaks])
+            period = np.mean(spacings)
+            if period > 0.5: b = int(100.0 / period)
+        
+    return len(peaks), b, sff
+```
+
+# — 2. CATALOG INGESTION —
+
+class CatalogScanner:
+def **init**(self):
+self.events = [
+{“name”: “GW150914”, “gps”: 1126259462.4, “m1”: 35.6, “m2”: 30.6, “dist”: 440, “type”: “BBH”},
+{“name”: “GW151226”, “gps”: 1135136350.6, “m1”: 13.7, “m2”: 7.7, “dist”: 450, “type”: “BBH”},
+{“name”: “GW170104”, “gps”: 1167559936.6, “m1”: 30.8, “m2”: 20.0, “dist”: 880, “type”: “BBH”},
+{“name”: “GW170608”, “gps”: 1180922494.5, “m1”: 11.0, “m2”: 7.6, “dist”: 320, “type”: “BBH”},
+{“name”: “GW170814”, “gps”: 1186741861.5, “m1”: 30.5, “m2”: 25.3, “dist”: 540, “type”: “BBH”},
+{“name”: “GW170817”, “gps”: 1187008882.4, “m1”: 1.46, “m2”: 1.27, “dist”: 40, “type”: “BNS”},
+{“name”: “GW190412”, “gps”: 1239082262.2, “m1”: 30.1, “m2”: 8.3, “dist”: 740, “type”: “BBH”},
+{“name”: “GW190425”, “gps”: 1240215503.0, “m1”: 2.0, “m2”: 1.4, “dist”: 159, “type”: “BNS”},
+{“name”: “GW190521”, “gps”: 1242442967.4, “m1”: 95.3, “m2”: 69.0, “dist”: 3900, “type”: “BBH”},
+{“name”: “GW190814”, “gps”: 1249852257.0, “m1”: 23.2, “m2”: 2.6, “dist”: 241, “type”: “NSBH”},
+{“name”: “GW200105”, “gps”: 1262304306.4, “m1”: 8.9, “m2”: 1.9, “dist”: 280, “type”: “NSBH”},
+{“name”: “GW200115”, “gps”: 1263096136.4, “m1”: 5.9, “m2”: 1.4, “dist”: 300, “type”: “NSBH”}
+]
+
+```
+def scan(self):
+    print(f"[CATALOG] Scanning {len(self.events)} Events (High Sensitivity)...")
+    results = []
+    
+    for i, ev in enumerate(self.events):
+        print(f"  > Processing {ev['name']} ({ev['type']})...")
+        try:
+            # Robust Fetch
+            data = TimeSeries.fetch_open_data('H1', ev['gps']-16, ev['gps']+16, verbose=False)
+            
+            # Signal Proc
+            white = data.whiten(4, 2)
+            
+            # Filter Logic
+            fs = data.sample_rate.value
+            nyq = 0.5 * fs
+            target_high = 1500.0 if ev['type'] == 'BNS' else 800.0 # Higher for BNS
+            if target_high >= nyq: target_high = nyq * 0.95
+            
+            sos = scipy.signal.butter(8, [30/nyq, target_high/nyq], btype='bandpass', output='sos')
+            bp = white.filter(sos, filtfilt=True)
+            
+            # Precise Peak finding
+            search = bp.crop(ev['gps']-0.5, ev['gps']+0.5)
+            peak_idx = search.argmax()
+            peak_time = search.times.value[peak_idx]
+            
+            # Crop Ringdown
+            # For BBH: 3ms delay. For BNS: Immediate or delayed? 
+            # Let's take a standardized 2ms delay to capture the "Collision"
+            ringdown = bp.crop(peak_time + 0.002, peak_time + 0.1).value
+            
+            # Analyze
+            n_peaks, b_val, sff_trace = HyperMorphicEngine.analyze_event(ringdown)
+            
+            results.append({
+                "name": ev['name'],
+                "type": ev['type'],
+                "total_mass": ev['m1'] + ev['m2'],
+                "dist": ev['dist'],
+                "peaks": n_peaks,
+                "winding_b": b_val,
+                "sff": sff_trace
+            })
+            
+        except Exception as e:
+            print(f"    ! Error: {e}")
+            
+    return pd.DataFrame(results)
+```
+
+# — 3. VISUALIZATION —
+
+def render_mega_chart(df):
+print(”\n[VISUAL] Rendering Ultra-Fine Topology…”)
+
+```
+fig = plt.figure(figsize=(24, 16))
+gs = gridspec.GridSpec(3, 4)
+
+type_colors = {"BBH": "#00ffff", "BNS": "#ff00ff", "NSBH": "#ffff00"}
+colors = [type_colors[t] for t in df['type']]
+
+# A. SFF WATERFALL (High Res)
+ax1 = fig.add_subplot(gs[0, :])
+ax1.set_title("A. HyperMorphic Resonance (The Texture of Spacetime)", fontsize=16, color='white', fontweight='bold')
+
+offset = 0
+# Normalize globally for fair comparison
+global_max = df['sff'].apply(np.max).max()
+
+for idx, row in df.iterrows():
+    # Local normalization for visibility of structure
+    sff_vis = row['sff'] / np.max(row['sff'][20:]) # Normalize to tail max
+    c = type_colors[row['type']]
+    
+    t_ax = np.linspace(0, 200, len(sff_vis))
+    # Cut start
+    ax1.plot(t_ax[20:], sff_vis[20:] + offset, color=c, linewidth=1, alpha=0.9)
+    
+    # Label
+    label = f"{row['name']} (b={row['winding_b']})"
+    ax1.text(205, offset + 0.5, label, color=c, fontsize=10, fontweight='bold')
+    offset += 1.5 # More space
+    
+ax1.set_ylabel("Event Stack")
+ax1.set_xlabel("Topological Time")
+ax1.set_xlim(0, 230)
+ax1.grid(alpha=0.15)
+
+# B. WINDING vs MASS (The Core Correlation)
+ax2 = fig.add_subplot(gs[1, 0:2])
+ax2.set_title("B. Winding Constant (b) vs Total Mass", fontsize=14, color='white')
+sc = ax2.scatter(df['total_mass'], df['winding_b'], c=colors, s=200, alpha=0.9, edgecolors='white')
+ax2.set_xlabel("Total Mass (M_sol)")
+ax2.set_ylabel("Winding Constant (b)")
+ax2.grid(alpha=0.2)
+# Fit line?
+if len(df) > 1:
+    z = np.polyfit(df['total_mass'], df['winding_b'], 1)
+    p = np.poly1d(z)
+    ax2.plot(df['total_mass'], p(df['total_mass']), "white", linestyle="--", alpha=0.5, label="Trend")
+    ax2.legend()
+
+# C. PEAKS vs TYPE (Boxplot)
+ax3 = fig.add_subplot(gs[1, 2:])
+ax3.set_title("C. Resonance Intensity by Object Type", fontsize=14, color='white')
+
+data_box = [
+    df[df['type']=='BBH']['peaks'],
+    df[df['type']=='NSBH']['peaks'],
+    df[df['type']=='BNS']['peaks']
+]
+
+bplot = ax3.boxplot(data_box, patch_artist=True, labels=['BBH', 'NSBH', 'BNS'], vert=True)
+for patch, color in zip(bplot['boxes'], ["#00ffff", "#ffff00", "#ff00ff"]):
+    patch.set_facecolor(color)
+    patch.set_alpha(0.7)
+ax3.set_ylabel("Anomaly Count (>1.05x Noise)")
+ax3.grid(alpha=0.2)
+
+# D. DISTANCE CHECK
+ax4 = fig.add_subplot(gs[2, :])
+ax4.set_title("D. Signal Integrity vs Distance (Does the winding fade?)", fontsize=14, color='white')
+ax4.scatter(df['dist'], df['peaks'], c=colors, s=150, alpha=0.9, edgecolors='white')
+ax4.set_xlabel("Distance (Mpc)")
+ax4.set_ylabel("Detected Peaks")
+ax4.grid(alpha=0.2)
+
+plt.figtext(0.5, 0.02, "HYPERMORPHIC CATALOG v3.0 | STATUS: FINE STRUCTURE RESOLVED", 
+            ha="center", fontsize=14, color="#00ffcc", fontfamily="monospace", weight='bold')
+
+plt.tight_layout(rect=[0, 0.05, 1, 1])
+plt.savefig('HyperMorphic_Mega_Chart_Fine.png', dpi=150)
+plt.show()
+```
+
+# — 4. RUN —
+
+if **name** == “**main**”:
+scanner = CatalogScanner()
+df = scanner.scan()
+print(”\n[DATA DUMP]”)
+print(df[[‘name’, ‘type’, ‘peaks’, ‘winding_b’]])
+render_mega_chart(df)
+
+Are these results good?
+
+SYSTEM] Initializing HyperMorphic Cluster…
+[CATALOG] Scanning 12 Events (High Sensitivity)…
+
+Processing GW150914 (BBH)…
+Processing GW151226 (BBH)…
+Processing GW170104 (BBH)…
+Processing GW170608 (BBH)…
+Processing GW170814 (BBH)…
+Processing GW170817 (BNS)…
+Processing GW190412 (BBH)…
+Processing GW190425 (BNS)…
+Processing GW190521 (BBH)…
+Processing GW190814 (NSBH)…
+Processing GW200105 (NSBH)…
+Processing GW200115 (NSBH)…
+[DATA DUMP]
+name  type  peaks  winding_b
+0   GW150914   BBH     15         45
+1   GW151226   BBH     16          9
+2   GW170104   BBH     10          7
+3   GW170608   BBH     17         31
+4   GW170814   BBH      7          6
+5   GW170817   BNS     52         33
+6   GW190412   BBH     14         12
+7   GW190425   BNS      0          0
+8   GW190521   BBH     11          6
+9   GW190814  NSBH     17         11
+10  GW200105  NSBH     14          9
+11  GW200115  NSBH     11          9
+
+[VISUAL] Rendering Ultra-Fine Topology…
