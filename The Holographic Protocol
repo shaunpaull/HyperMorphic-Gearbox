@@ -1,0 +1,265 @@
+# @title 🌪️ HYPERMORPHIC ENGINE (v30.2 - MASSIVE BULK PATCH)
+# @markdown **Objective: Applied Holographic Data Processing**
+# @markdown ---
+# @markdown *Fix: Increased Gear Dimension to 10^30 to ensure 60% survival satisfies the Bekenstein Bound.*
+
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+import math
+import random
+from functools import reduce
+from dataclasses import dataclass
+from typing import List, Any
+
+plt.style.use('dark_background')
+
+# ==========================================
+# CORE KERNEL: THE SAFEGEAR PRIMITIVE
+# ==========================================
+class SafeGear:
+    @staticmethod
+    def get_params(d: int):
+        if d <= 0: d = 1
+        m = int(math.isqrt(d)) + 1
+        b_raw = d.bit_length()
+        b = b_raw
+        while math.gcd(b, m) != 1:
+            b += 1
+        return m, b
+
+    @staticmethod
+    def encode(val: int, m: int, b: int) -> int:
+        return (val * b) % m
+
+    @staticmethod
+    def decode(val: int, m: int, b: int) -> int:
+        b_inv = pow(b, -1, m)
+        return (val * b_inv) % m
+
+    @staticmethod
+    def crt_reconstruct(remainders, moduli):
+        total_product = reduce(lambda x, y: x * y, moduli)
+        result = 0
+        for r, m in zip(remainders, moduli):
+            p = total_product // m
+            inv = pow(p, -1, m)
+            result += r * inv * p
+        return result % total_product
+
+# ==========================================
+# USE CASE 1: HoloRAID
+# ==========================================
+class HoloRAID:
+    def __init__(self, num_shards=10, start_dim=10**30): # Updated for massive capacity
+        self.num_shards = num_shards
+        self.gears = self._generate_coprime_gears(num_shards, start_dim)
+        self.capacity = reduce(lambda x,y: x*y, [g['m'] for g in self.gears])
+
+    def _generate_coprime_gears(self, n, d_start):
+        gears = []
+        d = d_start
+        known_mods = set()
+        step = 10**25 # Large stride
+        
+        while len(gears) < n:
+            m, b = SafeGear.get_params(d)
+            is_coprime = True
+            for k in known_mods:
+                if math.gcd(m, k) != 1:
+                    is_coprime = False
+                    break
+            if is_coprime:
+                gears.append({'m': m, 'b': b})
+                known_mods.add(m)
+            d += step
+        return gears
+
+    def store(self, data_bytes):
+        val = int.from_bytes(data_bytes, 'big')
+        if val >= self.capacity:
+            raise ValueError(f"Data exceeds Total Capacity.")
+        
+        shards = []
+        for g in self.gears:
+            local_val = val % g['m']
+            wound_val = SafeGear.encode(local_val, g['m'], g['b'])
+            shards.append(wound_val)
+        return shards
+
+    def recover(self, shards):
+        valid_r = []
+        valid_m = []
+        
+        for i, s in enumerate(shards):
+            if s is not None:
+                g = self.gears[i]
+                r = SafeGear.decode(s, g['m'], g['b'])
+                valid_r.append(r)
+                valid_m.append(g['m'])
+        
+        if not valid_r: return None
+        
+        # Safety Check: Bekenstein Bound
+        current_cap = reduce(lambda x,y: x*y, valid_m)
+        print(f"  > Surviving Capacity: {current_cap.bit_length()} bits")
+        
+        val = SafeGear.crt_reconstruct(valid_r, valid_m)
+        
+        # Dynamic Byte Conversion (Handle leading zeros logic if needed)
+        # We approximate length from value
+        length = (val.bit_length() + 7) // 8
+        return val.to_bytes(length, 'big')
+
+# ==========================================
+# USE CASE 2: TensorFold
+# ==========================================
+class TensorFold:
+    @staticmethod
+    def compress(vector, target_dim):
+        m_tgt, b_tgt = SafeGear.get_params(target_dim)
+        stream = []
+        for val in vector:
+            v_int = int(val * 10000) 
+            temp = abs(v_int)
+            sign = 1 if v_int >= 0 else -1
+            
+            sub_stream = []
+            if temp == 0: sub_stream.append(0)
+            while temp > 0:
+                chunk = temp % m_tgt
+                wound = SafeGear.encode(chunk, m_tgt, b_tgt)
+                sub_stream.append(wound)
+                temp //= m_tgt
+            
+            stream.append(sign)
+            stream.append(len(sub_stream))
+            stream.extend(sub_stream)
+        return stream, m_tgt, b_tgt
+
+    @staticmethod
+    def decompress(stream, m, b):
+        vector = []
+        idx = 0
+        while idx < len(stream):
+            sign = stream[idx]
+            length = stream[idx+1]
+            idx += 2
+            data_chunks = stream[idx : idx+length]
+            idx += length
+            
+            val = 0
+            power = 1
+            for chunk in data_chunks:
+                unwound = SafeGear.decode(chunk, m, b)
+                val += unwound * power
+                power *= m
+            vector.append((val * sign) / 10000.0)
+        return np.array(vector)
+
+# ==========================================
+# VISUALIZATION
+# ==========================================
+def visualize_engine(shards, damaged, weights, stream):
+    plt.figure(figsize=(16, 8))
+    gs = gridspec.GridSpec(2, 2)
+    
+    # 1. HoloRAID
+    ax1 = plt.subplot(gs[0, 0])
+    x = range(len(shards))
+    y_full = [1] * len(shards)
+    y_dmg = [1 if s is not None else 0 for s in damaged]
+    
+    ax1.bar(x, y_full, color='#003333', label='Capacity')
+    ax1.bar(x, y_dmg, color='#00ffcc', label='Active')
+    ax1.set_title("A. HoloRAID Integrity (40% Loss)", color='white', fontweight='bold')
+    ax1.legend(loc='lower right')
+    
+    # 2. Winding Topology
+    ax2 = plt.subplot(gs[0, 1])
+    theta = np.linspace(0, 2*np.pi, len(shards), endpoint=False)
+    # Log scale for visual
+    radii = np.array([math.log(s) if s else 0 for s in shards])
+    radii = radii / np.max(radii)
+    
+    px = (1 + radii) * np.cos(theta)
+    py = (1 + radii) * np.sin(theta)
+    ax2.plot(px, py, 'o-', color='magenta')
+    ax2.set_title("B. Shard Winding Pattern", color='white', fontweight='bold')
+    ax2.axis('off')
+    ax2.set_aspect('equal')
+    
+    # 3. TensorFold
+    ax3 = plt.subplot(gs[1, :])
+    ax3.plot(weights, color='yellow', linewidth=2, label='Neural Weights')
+    stream_disp = np.array(stream[:len(weights)*3])
+    stream_disp = (stream_disp - min(stream_disp))/(max(stream_disp)-min(stream_disp)+1e-9) * 2 - 1
+    ax3.plot(np.linspace(0, 50, len(stream_disp)), stream_disp, color='cyan', alpha=0.3, label='Winding Stream')
+    ax3.set_title("C. TensorFold Compression", color='white', fontweight='bold')
+    ax3.legend()
+    
+    plt.tight_layout()
+    plt.savefig('hypermorphic_engine_dashboard.png', dpi=150)
+    plt.show()
+
+def run_demonstration():
+    print("HYPERMORPHIC ENGINE v30.2 - MASSIVE BULK PATCH")
+    print("==============================================")
+    
+    # --- DEMO 1: HoloRAID ---
+    print("\n[USE CASE 1] HoloRAID: Expanding Dimensions...")
+    text = "The Universe is not made of atoms. It is made of stories."
+    print(f"  > Input: '{text}'")
+    
+    # Use 20 shards with massive dimensions
+    raid = HoloRAID(num_shards=20, start_dim=10**30)
+    
+    cap_bits = raid.capacity.bit_length()
+    data_bits = int.from_bytes(text.encode('utf-8'), 'big').bit_length()
+    print(f"  > System Capacity: {cap_bits} bits (Need: {data_bits} bits)")
+    
+    shards = raid.store(text.encode('utf-8'))
+    print(f"  > Sharded across 20 Dimensions.")
+    
+    # Destroy 40%
+    print("  > ! EVENT HORIZON BREACH ! Losing 40% of shards...")
+    damaged_shards = [None]*8 + shards[8:]
+    
+    recovered_bytes = raid.recover(damaged_shards)
+    
+    try:
+        recovered_text = recovered_bytes.decode('utf-8')
+        print(f"  > Recovery: '{recovered_text}'")
+        if text == recovered_text:
+            print("  >> SUCCESS: Information Preserved via Holographic Redundancy.")
+    except:
+        print("  >> FAILURE: Decode Error (Capacity still too low?)")
+
+    # --- DEMO 2: TensorFold ---
+    print("\n[USE CASE 2] TensorFold...")
+    weights = np.random.normal(0, 1, 50)
+    stream, m, b = TensorFold.compress(weights, 10000)
+    rec_weights = TensorFold.decompress(stream, m, b)
+    mse = np.mean((weights - rec_weights)**2)
+    print(f"  > Reconstruction MSE: {mse:.10f}")
+    
+    visualize_engine(shards, damaged_shards, weights, stream)
+
+if __name__ == "__main__":
+    run_demonstration()
+
+HYPERMORPHIC ENGINE v30.2 - MASSIVE BULK PATCH
+==============================================
+
+[USE CASE 1] HoloRAID: Expanding Dimensions...
+  > Input: 'The Universe is not made of atoms. It is made of stories.'
+  > System Capacity: 997 bits (Need: 455 bits)
+  > Sharded across 20 Dimensions.
+  > ! EVENT HORIZON BREACH ! Losing 40% of shards...
+  > Surviving Capacity: 598 bits
+  > Recovery: 'The Universe is not made of atoms. It is made of stories.'
+  >> SUCCESS: Information Preserved via Holographic Redundancy.
+
+[USE CASE 2] TensorFold...
+  > Reconstruction MSE: 0.0000000039
+
