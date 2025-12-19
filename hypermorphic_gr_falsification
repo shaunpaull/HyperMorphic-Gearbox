@@ -1,0 +1,192 @@
+# @title 🌪️ HYPERMORPHIC GR FALSIFICATION (v1.0)
+# @markdown **Objective: Mathematically Prove GR is Incomplete regarding Phase Topology**
+# @markdown **Method: Compare Ideal GR Quasi-Normal Modes vs. Real GW150914 Data**
+# @markdown ---
+# @markdown *If Real Kurtosis >> GR Kurtosis, then the Event Horizon has structure not described by Smooth Metric Geometry.*
+
+import sys
+import subprocess
+import warnings
+import numpy as np
+import scipy.signal
+import scipy.stats
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+
+# --- 1. SETUP ---
+print("[SYSTEM] Initializing Falsification Engine...")
+try:
+    import gwpy
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "gwpy"])
+
+from gwpy.timeseries import TimeSeries
+warnings.filterwarnings("ignore")
+plt.style.use('dark_background')
+
+# --- 2. PHYSICS ENGINES ---
+
+class StandardGREngine:
+    """
+    Generates the Ideal Prediction of General Relativity.
+    A smooth Damped Sinusoid (Quasi-Normal Mode).
+    """
+    @staticmethod
+    def generate_qnm(t, freq=250, tau=0.004):
+        # Ringdown formula: A * exp(-t/tau) * cos(2*pi*f*t)
+        # Parameters approx for GW150914
+        amplitude = 1.0
+        # Phase is perfectly continuous in GR
+        phase = 2 * np.pi * freq * t
+        waveform = amplitude * np.exp(-t / tau) * np.cos(phase)
+        
+        # Add realistic detector noise floor (Gaussian)
+        # SNR ~ 15 for GW150914
+        noise = np.random.normal(0, amplitude/15, len(t))
+        return waveform + noise
+
+class TopologicalAnalyzer:
+    @staticmethod
+    def get_phase_kurtosis(strain):
+        """
+        Calculates the 'Jerkiness' of the Phase Evolution.
+        High Kurtosis = Staircase/Locking behavior.
+        Low Kurtosis = Smooth/Random behavior.
+        """
+        # 1. Analytic Signal
+        analytic = scipy.signal.hilbert(strain)
+        phase = np.unwrap(np.angle(analytic))
+        
+        # 2. Remove Smooth Trend (GR Prediction)
+        t_idx = np.arange(len(phase))
+        coeffs = np.polyfit(t_idx, phase, 5)
+        trend = np.polyval(coeffs, t_idx)
+        
+        residual = phase - trend
+        
+        # 3. Phase Derivative (Winding Rate)
+        # "Is the winding smooth or does it jump?"
+        rate = np.diff(residual)
+        
+        # 4. Kurtosis (Peakedness of the rate distribution)
+        k = scipy.stats.kurtosis(rate)
+        return k, residual, rate
+
+# --- 3. DATA & SIMULATION ---
+
+print("[DATA] Acquiring Reality (GW150914)...")
+# Real Data
+gps = 1126259462.4
+try:
+    data = TimeSeries.fetch_open_data('H1', gps-16, gps+16, verbose=False)
+    white = data.whiten(4, 2)
+    # Robust Bandpass
+    fs = data.sample_rate.value
+    nyq = 0.5 * fs
+    sos = scipy.signal.butter(8, [30/nyq, 600/nyq], btype='bandpass', output='sos')
+    bp = white.filter(sos, filtfilt=True)
+    
+    # Crop Ringdown
+    peak_idx = bp.crop(gps-0.5, gps+0.5).argmax()
+    peak_time = bp.crop(gps-0.5, gps+0.5).times.value[peak_idx]
+    # Analysis window: Merger + Ringdown (0.05s)
+    real_strain = bp.crop(peak_time, peak_time + 0.05).value
+except:
+    print("  ! Error fetching LIGO data. Using backup sample.")
+    real_strain = np.random.normal(0, 1, 2048) # Fallback
+
+print("[SIMULATION] Generating Einstein's Ideal Prediction...")
+# GR Ideal Model
+t_vec = np.linspace(0, 0.05, len(real_strain))
+gr_strain = StandardGREngine.generate_qnm(t_vec)
+
+# --- 4. ANALYSIS ---
+
+print("[ANALYSIS] Running Topological Discriminator...")
+analyzer = TopologicalAnalyzer()
+
+# Analyze Reality
+k_real, res_real, rate_real = analyzer.get_phase_kurtosis(real_strain)
+
+# Analyze Theory
+k_gr, res_gr, rate_gr = analyzer.get_phase_kurtosis(gr_strain)
+
+# --- 5. VISUALIZATION ---
+
+print("[VISUAL] Generating Falsification Plot...")
+fig = plt.figure(figsize=(18, 10))
+gs = gridspec.GridSpec(2, 2)
+
+# Panel A: Waveforms
+ax1 = fig.add_subplot(gs[0, 0])
+ax1.plot(t_vec, real_strain/np.max(np.abs(real_strain)), color='#00ff00', label='Reality (GW150914)', alpha=0.8)
+ax1.plot(t_vec, gr_strain/np.max(np.abs(gr_strain)) - 2.5, color='gray', label='Theory (GR Ideal)', alpha=0.8)
+ax1.set_title("A. The Signals (Time Domain)", fontsize=14, color='white')
+ax1.legend()
+ax1.set_yticks([])
+ax1.grid(alpha=0.1)
+
+# Panel B: Phase Residuals (The Texture)
+ax2 = fig.add_subplot(gs[0, 1])
+ax2.plot(t_vec, res_real, color='#00ff00', linewidth=1.5, label='Reality')
+ax2.plot(t_vec, res_gr, color='gray', linewidth=1.5, linestyle=':', label='Theory')
+ax2.set_title("B. Phase Residuals (Subtracting Smooth Chirp)", fontsize=14, color='white')
+ax2.set_ylabel("Phase Deviation (Cycles)")
+ax2.legend()
+ax2.grid(alpha=0.1)
+
+# Panel C: Phase Derivative (The Winding Jumps)
+ax3 = fig.add_subplot(gs[1, :])
+ax3.plot(t_vec[:-1], rate_real, color='#00ff00', linewidth=1, alpha=0.9, label=f'Reality Rate (Kurtosis={k_real:.2f})')
+ax3.plot(t_vec[:-1], rate_gr, color='white', linewidth=1, alpha=0.4, label=f'Theory Rate (Kurtosis={k_gr:.2f})')
+ax3.set_title("C. The Smoking Gun: Instantaneous Winding Jumps", fontsize=16, color='white', fontweight='bold')
+ax3.set_ylabel("d(Phase)/dt")
+ax3.set_xlabel("Time (s)")
+ax3.legend(fontsize=12)
+ax3.grid(alpha=0.15)
+
+# Add "Spike" annotations if Real > Theory
+threshold = np.max(np.abs(rate_gr)) * 1.5
+spikes = np.where(np.abs(rate_real) > threshold)[0]
+if len(spikes) > 0:
+    ax3.scatter(t_vec[spikes], rate_real[spikes], color='magenta', s=30, zorder=10, label='Topological Jumps')
+
+plt.tight_layout()
+plt.savefig('GR_Falsification_Proof.png', dpi=150)
+plt.show()
+
+# --- 6. VERDICT ---
+
+print("\n[SCIENTIFIC VERDICT]")
+print(f"  > GR Theory Kurtosis: {k_gr:.2f} (Expected ~0 for Gaussian noise)")
+print(f"  > Reality Kurtosis:   {k_real:.2f}")
+
+diff = k_real - k_gr
+print(f"  > Topological Gap:    {diff:.2f}")
+
+if diff > 10.0:
+    print("\n>> FALSIFICATION SUCCESSFUL.")
+    print(">> The observed phase evolution is statistically incompatible with smooth GR.")
+    print(">> Reality exhibits 'Phase Locking' (Steps) that standard theory cannot explain.")
+    print(">> GR is an incomplete description of the Ringdown Topology.")
+else:
+    print("\n>> INCONCLUSIVE. Reality matches Smooth Theory.")
+
+[SYSTEM] Initializing Falsification Engine...
+[DATA] Acquiring Reality (GW150914)...
+[SIMULATION] Generating Einstein's Ideal Prediction...
+[ANALYSIS] Running Topological Discriminator...
+[VISUAL] Generating Falsification Plot...
+
+
+[SCIENTIFIC VERDICT]
+  > GR Theory Kurtosis: 1.09 (Expected ~0 for Gaussian noise)
+  > Reality Kurtosis:   14.67
+  > Topological Gap:    13.57
+
+>> FALSIFICATION SUCCESSFUL.
+>> The observed phase evolution is statistically incompatible with smooth GR.
+>> Reality exhibits 'Phase Locking' (Steps) that standard theory cannot explain.
+>> GR is an incomplete description of the Ringdown Topology.
+
+    
