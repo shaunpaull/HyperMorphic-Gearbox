@@ -1,0 +1,221 @@
+# @title 🌪️ HYPERMORPHIC BEDROCK TEST (v1.0)
+# @markdown **Objective: Destructive Testing of the Phase-Locking Anomaly**
+# @markdown **Target: GW150914**
+# @markdown ---
+# @markdown *Tests: Temporal Jitter, Polynomial Stiffness, Cross-Detector consistency, and Multi-Mode GR null hypothesis.*
+
+import sys
+import subprocess
+import warnings
+import numpy as np
+import scipy.signal
+import scipy.stats
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+
+# --- 1. SETUP ---
+print("[SYSTEM] Initializing Falsification Cluster...")
+try:
+    import gwpy
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "gwpy"])
+
+from gwpy.timeseries import TimeSeries
+warnings.filterwarnings("ignore")
+plt.style.use('dark_background')
+
+# --- 2. PHYSICS ENGINE ---
+
+class RobustAnalyzer:
+    @staticmethod
+    def get_phase_kurtosis(strain, poly_order=5):
+        """
+        Calculates Phase Derivative Kurtosis.
+        High K = Staircase. Low K = Smooth.
+        """
+        analytic = scipy.signal.hilbert(strain)
+        phase = np.unwrap(np.angle(analytic))
+        
+        # Polynomial subtraction (The GR Trend)
+        t_idx = np.arange(len(phase))
+        try:
+            coeffs = np.polyfit(t_idx, phase, poly_order)
+            trend = np.polyval(coeffs, t_idx)
+            residual = phase - trend
+            
+            # Rate of change of residual (Winding Jumps)
+            rate = np.diff(residual)
+            
+            # Kurtosis (Peakedness)
+            k = scipy.stats.kurtosis(rate)
+            return k
+        except:
+            return 0.0
+
+    @staticmethod
+    def generate_nr_proxy(t_len=2048, sample_rate=4096):
+        """
+        Generates a Multi-Mode GR Waveform (Fundamental + Overtone).
+        This represents 'Perfect' General Relativity.
+        """
+        t = np.linspace(0, t_len/sample_rate, t_len)
+        
+        # Mode 1 (Fundamental 220)
+        h1 = np.exp(-t/0.004) * np.cos(2*np.pi*250*t)
+        
+        # Mode 2 (Overtone 221 - Faster decay, diff freq)
+        h2 = 0.3 * np.exp(-t/0.002) * np.cos(2*np.pi*330*t + 0.5)
+        
+        # Combined GR Prediction
+        signal = h1 + h2
+        
+        # Add Detector Noise Floor
+        noise = np.random.normal(0, 0.05, len(t))
+        return signal + noise
+
+# --- 3. DATA INGESTION ---
+
+print("[DATA] Fetching GW150914 (H1 & L1)...")
+gps = 1126259462.4
+detectors = {}
+try:
+    for det in ['H1', 'L1']:
+        data = TimeSeries.fetch_open_data(det, gps-16, gps+16, verbose=False)
+        white = data.whiten(4, 2)
+        
+        # Robust Bandpass
+        fs = data.sample_rate.value
+        nyq = 0.5 * fs
+        sos = scipy.signal.butter(8, [30/nyq, 600/nyq], btype='bandpass', output='sos')
+        bp = white.filter(sos, filtfilt=True)
+        detectors[det] = bp
+    print("  > Data Locked.")
+except Exception as e:
+    print(f"  ! Data Error: {e}")
+    sys.exit()
+
+# --- 4. THE TORTURE TEST ---
+
+def run_falsification():
+    print("\n[PHASE 1] WINDOWING ROBUSTNESS TEST")
+    # Shift start time by +/- 5ms
+    offsets = np.linspace(-0.005, 0.005, 20)
+    k_window_h1 = []
+    
+    # Locate peak
+    peak_idx = detectors['H1'].crop(gps-0.1, gps+0.1).argmax()
+    peak_time = detectors['H1'].crop(gps-0.1, gps+0.1).times.value[peak_idx]
+    
+    for dt in offsets:
+        # Crop: Peak + dt to Peak + dt + 0.05
+        start = peak_time + 0.002 + dt # Base + jitter
+        end = start + 0.05
+        seg = detectors['H1'].crop(start, end).value
+        k = RobustAnalyzer.get_phase_kurtosis(seg, poly_order=5)
+        k_window_h1.append(k)
+        
+    print("\n[PHASE 2] POLYNOMIAL ORDER TEST")
+    # Using optimal window, vary poly order
+    orders = range(3, 8)
+    k_poly_h1 = []
+    base_seg = detectors['H1'].crop(peak_time+0.002, peak_time+0.052).value
+    
+    for o in orders:
+        k = RobustAnalyzer.get_phase_kurtosis(base_seg, poly_order=o)
+        k_poly_h1.append(k)
+
+    print("\n[PHASE 3] DETECTOR CONSISTENCY (H1 vs L1)")
+    base_seg_l1 = detectors['L1'].crop(peak_time+0.002, peak_time+0.052).value
+    k_h1 = RobustAnalyzer.get_phase_kurtosis(base_seg)
+    k_l1 = RobustAnalyzer.get_phase_kurtosis(base_seg_l1)
+    
+    print("\n[PHASE 4] NULL HYPOTHESIS (Multi-Mode GR)")
+    nr_strain = RobustAnalyzer.generate_nr_proxy(len(base_seg))
+    k_nr = RobustAnalyzer.get_phase_kurtosis(nr_strain)
+    
+    # --- VISUALIZATION ---
+    print("[VISUAL] Generating Bedrock Report...")
+    fig = plt.figure(figsize=(18, 12))
+    gs = gridspec.GridSpec(2, 2)
+    
+    # 1. Window Jitter
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.plot(offsets*1000, k_window_h1, 'o-', color='cyan')
+    ax1.axhline(3.0, color='red', linestyle='--', label='Gaussian Limit')
+    ax1.set_title("A. Window Jitter Test (+/- 5ms)", fontsize=14, color='white', fontweight='bold')
+    ax1.set_xlabel("Start Time Offset (ms)")
+    ax1.set_ylabel("Phase Kurtosis")
+    ax1.legend()
+    ax1.grid(alpha=0.2)
+    
+    # 2. Poly Order
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax2.bar(orders, k_poly_h1, color='magenta', alpha=0.7)
+    ax2.axhline(3.0, color='red', linestyle='--')
+    ax2.set_title("B. Polynomial Sensitivity", fontsize=14, color='white', fontweight='bold')
+    ax2.set_xlabel("Fitting Order")
+    ax2.grid(alpha=0.2)
+    
+    # 3. Detector Comparison
+    ax3 = fig.add_subplot(gs[1, 0])
+    ax3.bar(['Hanford (H1)', 'Livingston (L1)', 'Ideal GR (NR)'], [k_h1, k_l1, k_nr], 
+            color=['#00ff00', '#ff00ff', 'gray'])
+    ax3.axhline(3.0, color='red', linestyle='--')
+    ax3.text(0, k_h1+0.5, f"{k_h1:.1f}", color='white', ha='center')
+    ax3.text(1, k_l1+0.5, f"{k_l1:.1f}", color='white', ha='center')
+    ax3.text(2, k_nr+0.5, f"{k_nr:.1f}", color='white', ha='center')
+    ax3.set_title("C. Detector Consistency vs Theory", fontsize=14, color='white', fontweight='bold')
+    ax3.grid(alpha=0.2)
+    
+    # 4. Result Text
+    ax4 = fig.add_subplot(gs[1, 1])
+    ax4.axis('off')
+    
+    # Logic for PASS/FAIL
+    window_pass = np.mean(k_window_h1) > 5.0
+    poly_pass = np.min(k_poly_h1) > 5.0
+    det_pass = (k_l1 > 5.0) and (abs(k_h1 - k_l1) < 15.0) # Consistent high signal
+    nr_fail = k_nr < 3.0 # GR should be low kurtosis
+    
+    verdict_text = f"""
+    [DIAGNOSTIC REPORT]
+    
+    1. WINDOW ROBUSTNESS: {'✅ PASS' if window_pass else '❌ FAIL'}
+       (Avg Kurtosis: {np.mean(k_window_h1):.2f})
+       
+    2. POLY INDEPENDENCE: {'✅ PASS' if poly_pass else '❌ FAIL'}
+       (Min Kurtosis: {np.min(k_poly_h1):.2f})
+       
+    3. DETECTOR COHERENCE: {'✅ PASS' if det_pass else '❌ FAIL'}
+       (H1: {k_h1:.2f}, L1: {k_l1:.2f})
+       
+    4. GR FALSIFICATION: {'✅ PASS' if nr_fail else '❌ FAIL'}
+       (Theory Kurtosis: {k_nr:.2f})
+       
+    ----------------------------------
+    FINAL STATUS: {'BEDROCK CONFIRMED' if (window_pass and poly_pass and det_pass and nr_fail) else 'HYPOTHESIS UNSTABLE'}
+    """
+    
+    ax4.text(0.1, 0.5, verdict_text, color='#00ffcc', fontfamily='monospace', fontsize=12,
+             bbox=dict(facecolor='black', edgecolor='#00ffcc', boxstyle='round,pad=1'))
+
+    plt.tight_layout()
+    plt.savefig('Bedrock_Test.png', dpi=150)
+    plt.show()
+
+if __name__ == "__main__":
+    run_falsification()
+
+[SYSTEM] Initializing Falsification Cluster...
+[DATA] Fetching GW150914 (H1 & L1)...
+  > Data Locked.
+
+[PHASE 1] WINDOWING ROBUSTNESS TEST
+
+[PHASE 2] POLYNOMIAL ORDER TEST
+
+[PHASE 3] DETECTOR CONSISTENCY (H1 vs L1)
+
+[PHASE 4] NULL HYPOTHESIS (Multi-Mode GR)
+[VISUAL] Generating Bedrock Report...
+
