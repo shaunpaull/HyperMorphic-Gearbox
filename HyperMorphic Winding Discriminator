@@ -1,0 +1,240 @@
+# @title 🌪️ HYPERMORPHIC WINDING DISCRIMINATOR (v1.0)
+# @markdown **Objective: Distinguish Smooth Phase-Locking from Topological Winding**
+# @markdown **Targets: GW150914 (BBH) & GW170817 (BNS)**
+# @markdown ---
+# @markdown *Method: Phase Residual Analysis looking for 'Integer Staircase' artifacts and Scale Invariance.*
+
+import sys
+import subprocess
+import warnings
+import numpy as np
+import scipy.signal
+import scipy.stats
+import scipy.optimize
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+from matplotlib.colors import LogNorm
+
+# --- 1. SETUP & INSTALL ---
+print("[SYSTEM] Initializing Discriminator Cluster...")
+try:
+    import gwpy
+except ImportError:
+    print("  > Installing GWpy...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "gwpy"])
+
+from gwpy.timeseries import TimeSeries
+warnings.filterwarnings("ignore")
+plt.style.use('dark_background')
+
+# --- 2. THE TOPOLOGICAL ENGINE ---
+
+class WindingDiscriminator:
+    @staticmethod
+    def extract_winding_texture(strain, sample_rate):
+        """
+        Isolates the 'Texture' of spacetime by removing the smooth GR Chirp.
+        """
+        # 1. Analytic Signal
+        analytic = scipy.signal.hilbert(strain)
+        
+        # 2. Unwrapped Phase (Total rotations)
+        raw_phase = np.unwrap(np.angle(analytic))
+        
+        # 3. Normalize to Cycles (Winding Count)
+        # phi_cycles represents the raw number of rotations
+        phi_cycles = raw_phase / (2 * np.pi)
+        
+        # 4. Remove the Smooth GR Trend
+        # A merger chirp is roughly polynomial in phase evolution.
+        # We fit a high-order polynomial to subtract the "Smooth" physics.
+        # What remains is the "Discrete" deviation.
+        t = np.arange(len(phi_cycles))
+        
+        # Polyfit (Order 5 captures the chirp acceleration well)
+        coeffs = np.polyfit(t, phi_cycles, 5)
+        smooth_trend = np.polyval(coeffs, t)
+        
+        # The Residual: "The Texture"
+        # If HyperMorphic, this should show steps/plateaus.
+        winding_residual = phi_cycles - smooth_trend
+        
+        # 5. Calculate Instantaneous Winding Rate (Derivative of residual)
+        # Peaks here indicate "Gear Shifts"
+        winding_rate = np.diff(winding_residual)
+        
+        return phi_cycles, smooth_trend, winding_residual, winding_rate
+
+    @staticmethod
+    def scale_invariance_test(residual, scales=[1, 2, 4, 8]):
+        """
+        Checks if the structure persists at different temporal resolutions.
+        True topological features are scale invariant. Noise washes out.
+        """
+        coarse_grains = []
+        for s in scales:
+            # Downsample/Average
+            if s == 1:
+                cg = residual
+            else:
+                # Boxcar average
+                kernel = np.ones(s) / s
+                cg = np.convolve(residual, kernel, mode='valid')
+            
+            # Normalize for comparison
+            if np.std(cg) > 0:
+                cg = (cg - np.mean(cg)) / np.std(cg)
+            coarse_grains.append(cg)
+            
+        return coarse_grains
+
+# --- 3. DATA INGESTION ---
+
+class RealDataFetcher:
+    def __init__(self):
+        self.events = [
+            {"name": "GW150914", "gps": 1126259462.4, "type": "Black Hole"},
+            {"name": "GW170817", "gps": 1187008882.4, "type": "Neutron Star"}
+        ]
+        
+    def get_event_data(self, target_idx=0):
+        target = self.events[target_idx]
+        print(f"[DATA] Fetching {target['name']} ({target['type']})...")
+        
+        try:
+            # Fetch H1
+            data = TimeSeries.fetch_open_data('H1', target['gps']-16, target['gps']+16, verbose=False)
+            white = data.whiten(4, 2)
+            
+            # Bandpass: Focused on the "Ringing" frequencies
+            # BBH: 30-300Hz. BNS: 30-1500Hz.
+            high = 1500 if "Neutron" in target['type'] else 600
+            fs = data.sample_rate.value
+            if high > fs/2: high = fs/2 * 0.95
+            
+            bp = white.bandpass(30, high)
+            
+            # Crop to Merger + Ringdown
+            search = bp.crop(target['gps']-0.5, target['gps']+0.5)
+            peak_time = search.times.value[search.argmax()]
+            
+            # CRITICAL: We analyze the merger AND immediate ringdown
+            # -0.05s to +0.05s
+            zoom = bp.crop(peak_time - 0.05, peak_time + 0.05)
+            
+            return zoom.value, fs, target['name']
+            
+        except Exception as e:
+            print(f"  ! Error: {e}")
+            return None, None, None
+
+# --- 4. EXECUTION & VISUALIZATION ---
+
+def run_discriminator():
+    print("HYPERMORPHIC WINDING DISCRIMINATOR (v1.0)")
+    print("=========================================")
+    
+    fetcher = RealDataFetcher()
+    discriminator = WindingDiscriminator()
+    
+    # Process both events
+    for i in range(2):
+        strain, fs, name = fetcher.get_event_data(i)
+        if strain is None: continue
+        
+        # 1. Extract Winding
+        phi, trend, resid, rate = discriminator.extract_winding_texture(strain, fs)
+        
+        # 2. Scale Test
+        scales = discriminator.scale_invariance_test(resid)
+        
+        # --- PLOTTING ---
+        fig = plt.figure(figsize=(20, 12))
+        gs = gridspec.GridSpec(3, 3)
+        fig.suptitle(f"Topological Analysis: {name}", fontsize=20, color='white', y=0.95)
+        
+        # Panel A: The Subtraction (GR Removal)
+        ax1 = fig.add_subplot(gs[0, :])
+        t = np.linspace(-0.05, 0.05, len(phi))
+        ax1.plot(t, phi, color='gray', alpha=0.5, label='Raw Phase Evolution')
+        ax1.plot(t, trend, color='white', linestyle='--', label='Smooth GR Fit')
+        ax1.set_title("A. Removing the Geometry (General Relativity)", fontsize=14, color='white')
+        ax1.set_ylabel("Accumulated Cycles")
+        ax1.legend()
+        ax1.grid(alpha=0.15)
+        
+        # Panel B: The Residuals (The Texture)
+        ax2 = fig.add_subplot(gs[1, 0:2])
+        # We amplify the residual to look for "Staircases"
+        ax2.plot(t, resid, color='cyan', linewidth=1.5)
+        
+        # Highlight Plateaus?
+        # A plateau is where derivative is near zero
+        flat_mask = np.abs(np.pad(rate, (1,0))) < np.std(rate)*0.2
+        # ax2.scatter(t[flat_mask], resid[flat_mask], color='magenta', s=5, alpha=0.5, label='Phase Lock')
+        
+        ax2.set_title("B. Winding Residuals (The HyperMorphic Texture)", fontsize=14, color='white')
+        ax2.set_ylabel("Phase Deviation (Cycles)")
+        ax2.set_xlabel("Time from Merger (s)")
+        ax2.axhline(0, color='white', linestyle=':', alpha=0.3)
+        ax2.grid(alpha=0.15)
+        
+        # Panel C: Integer Quantization (Histogram)
+        ax3 = fig.add_subplot(gs[1, 2])
+        # Look at the fractional part of the residual scaled by some factor
+        # Hypothesis: Residuals cluster around specific values
+        ax3.hist(resid, bins=50, color='magenta', orientation='horizontal', alpha=0.6)
+        ax3.set_title("C. Phase Clustering", fontsize=14, color='white')
+        ax3.set_xlabel("Density")
+        ax3.grid(alpha=0.15)
+        
+        # Panel D: Scale Invariance (Heatmap)
+        ax4 = fig.add_subplot(gs[2, :])
+        # Stack scales into a matrix
+        # Resize to match smallest
+        min_len = len(scales[-1])
+        stack = np.array([s[:min_len] for s in scales])
+        
+        im = ax4.imshow(stack, aspect='auto', cmap='inferno', interpolation='nearest', 
+                       extent=[t[0], t[-1], 1, 8])
+        ax4.set_title("D. Scale Invariance Test (Self-Similarity)", fontsize=14, color='white')
+        ax4.set_ylabel("Resolution Scale")
+        ax4.set_xlabel("Time")
+        ax4.set_yticks([1, 2, 3, 4])
+        ax4.set_yticklabels(['1x', '2x', '4x', '8x'])
+        
+        plt.tight_layout(rect=[0, 0, 1, 0.93])
+        plt.savefig(f"{name}_Winding_Analysis.png", dpi=150)
+        plt.show()
+        
+        # --- VERDICT ---
+        print(f"\n[VERDICT: {name}]")
+        # Check for staircases: High Kurtosis in Rate (spiky derivative = flat plateaus)
+        kurt = scipy.stats.kurtosis(rate)
+        print(f"  > Derivative Kurtosis: {kurt:.2f} (Gaussian=0)")
+        
+        if kurt > 3.0:
+            print("  >> STEP-LIKE BEHAVIOR DETECTED. Phase is locking intermittently.")
+        else:
+            print("  >> Smooth evolution. Consistent with GR.")
+            
+        print("-" * 60)
+
+if __name__ == "__main__":
+    run_discriminator()
+
+[SYSTEM] Initializing Discriminator Cluster...
+HYPERMORPHIC WINDING DISCRIMINATOR (v1.1 - PATCHED)
+===================================================
+[DATA] Fetching GW150914 (Black Hole (BBH))...
+￼
+[VERDICT: GW150914]
+  > Derivative Kurtosis: 20.91
+  >> STEP-LIKE BEHAVIOR DETECTED. Phase is locking.
+------------------------------------------------------------
+[DATA] Fetching GW170817 (Neutron Star (BNS))...
+￼
+[VERDICT: GW170817]
+  > Derivative Kurtosis: 3.34
+  >> STEP-LIKE BEHAVIOR DETECTED. Phase is locking.
+------------------------------------------------------------
